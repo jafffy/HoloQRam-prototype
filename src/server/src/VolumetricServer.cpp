@@ -12,9 +12,10 @@
 #include <sstream>
 
 #define PORT 8765
-#define BUFFER_SIZE 65507 // Max UDP packet size
+#define MAX_PACKET_SIZE 65507 // Max UDP packet size
+#define CHUNK_HEADER_SIZE 8   // 4 bytes for total chunks, 4 bytes for chunk index
 
-VolumetricServer::VolumetricServer() : compressor(pcl::io::HIGH_RES_ONLINE_COMPRESSION_WITHOUT_COLOR, false) {
+VolumetricServer::VolumetricServer() : compressor(pcl::io::HIGH_RES_ONLINE_COMPRESSION_WITH_COLOR, false) {
     setupSocket();
     generateSamplePointCloud();
 }
@@ -31,6 +32,12 @@ void VolumetricServer::setupSocket() {
     if (sockfd < 0) {
         std::cerr << "Error creating socket" << std::endl;
         exit(1);
+    }
+
+    // Enable socket buffer size option
+    int sendbuff = 1024 * 1024; // 1MB buffer
+    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendbuff, sizeof(sendbuff)) < 0) {
+        std::cerr << "Warning: Could not set socket buffer size" << std::endl;
     }
 
     serverAddr.sin_family = AF_INET;
@@ -75,27 +82,33 @@ void VolumetricServer::streamPointCloud() {
         
         std::string data = compressedData.str();
         size_t totalSize = data.size();
+        
+        // Calculate number of chunks needed
+        size_t maxChunkDataSize = MAX_PACKET_SIZE - CHUNK_HEADER_SIZE;
+        uint32_t totalChunks = (totalSize + maxChunkDataSize - 1) / maxChunkDataSize;
 
-        // First send the size of the data
+        // Set up client address
         clientAddr.sin_family = AF_INET;
         clientAddr.sin_port = htons(8766);
         inet_pton(AF_INET, "127.0.0.1", &clientAddr.sin_addr);
 
-        uint32_t size = static_cast<uint32_t>(totalSize);
-        sendto(sockfd, &size, sizeof(size), 0,
-                (struct sockaddr*)&clientAddr, sizeof(clientAddr));
-
-        // Then send the data in chunks
-        size_t offset = 0;
-        while (offset < totalSize) {
-            size_t chunkSize = std::min(BUFFER_SIZE - sizeof(uint32_t), totalSize - offset);
-            std::string chunk = data.substr(offset, chunkSize);
+        // Send data in chunks
+        for (uint32_t chunkIndex = 0; chunkIndex < totalChunks; ++chunkIndex) {
+            size_t offset = chunkIndex * maxChunkDataSize;
+            size_t chunkSize = std::min(maxChunkDataSize, totalSize - offset);
             
-            sendto(sockfd, chunk.c_str(), chunk.size(), 0,
-                    (struct sockaddr*)&clientAddr, sizeof(clientAddr));
+            // Prepare packet with header
+            std::vector<char> packet(CHUNK_HEADER_SIZE + chunkSize);
+            memcpy(packet.data(), &totalChunks, sizeof(totalChunks));
+            memcpy(packet.data() + sizeof(totalChunks), &chunkIndex, sizeof(chunkIndex));
+            memcpy(packet.data() + CHUNK_HEADER_SIZE, data.data() + offset, chunkSize);
             
-            offset += chunkSize;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Small delay between chunks
+            // Send packet
+            sendto(sockfd, packet.data(), packet.size(), 0,
+                   (struct sockaddr*)&clientAddr, sizeof(clientAddr));
+            
+            // Small delay between chunks to prevent overwhelming the network
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
     } catch (const std::exception& e) {
         std::cerr << "Error streaming point cloud: " << e.what() << std::endl;

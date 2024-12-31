@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include <iostream>
 #include <numeric>
+#include <map>
+
+#define CHUNK_HEADER_SIZE 8   // 4 bytes for total chunks, 4 bytes for chunk index
 
 NetworkManager::NetworkManager(DecompressionManager* decompManager)
     : decompManager(decompManager)
@@ -34,6 +37,12 @@ void NetworkManager::setupSocket() {
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
         throw std::runtime_error("Error creating socket");
+    }
+
+    // Set receive buffer size
+    int rcvbuf = 1024 * 1024; // 1MB buffer
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf)) < 0) {
+        std::cerr << "Warning: Could not set socket receive buffer size" << std::endl;
     }
 
     serverAddr.sin_family = AF_INET;
@@ -96,9 +105,8 @@ void NetworkManager::updateRTT() {
 
 void NetworkManager::receiveData() {
     char buffer[65507];  // Maximum UDP packet size
-    std::vector<char> receivedData;
-    uint32_t expectedSize = 0;
-    bool waitingForSize = true;
+    std::map<uint32_t, std::vector<char>> frameBuffers;  // Map of frame chunks
+    std::map<uint32_t, uint32_t> expectedChunks;        // Map of expected chunk counts
     
     while (!shouldStop) {
         ssize_t bytesReceived = recv(sockfd, buffer, sizeof(buffer), 0);
@@ -106,22 +114,45 @@ void NetworkManager::receiveData() {
             updateBandwidth(bytesReceived);
             updateRTT();
 
-            if (waitingForSize) {
-                if (bytesReceived >= sizeof(uint32_t)) {
-                    expectedSize = *reinterpret_cast<uint32_t*>(buffer);
-                    receivedData.reserve(expectedSize);
-                    waitingForSize = false;
-                }
-            } else {
-                receivedData.insert(receivedData.end(), buffer, buffer + bytesReceived);
+            if (bytesReceived > CHUNK_HEADER_SIZE) {
+                // Extract header information
+                uint32_t totalChunks = *reinterpret_cast<uint32_t*>(buffer);
+                uint32_t chunkIndex = *reinterpret_cast<uint32_t*>(buffer + sizeof(uint32_t));
                 
-                if (receivedData.size() >= expectedSize) {
-                    // Pass the received frame to DecompressionManager
-                    decompManager->addCompressedFrame(std::move(receivedData));
+                // Generate a unique frame ID based on the first chunk received
+                uint32_t frameId = (chunkIndex == 0) ? 
+                    static_cast<uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count()) : 
+                    expectedChunks.rbegin()->first;
+
+                // Store expected chunk count for this frame
+                if (expectedChunks.find(frameId) == expectedChunks.end()) {
+                    expectedChunks[frameId] = totalChunks;
+                    frameBuffers[frameId].reserve(65507 * totalChunks); // Pre-allocate approximate size
+                }
+
+                // Store chunk data
+                size_t dataSize = bytesReceived - CHUNK_HEADER_SIZE;
+                size_t offset = chunkIndex * (65507 - CHUNK_HEADER_SIZE);
+                
+                // Ensure buffer is large enough
+                if (frameBuffers[frameId].size() < offset + dataSize) {
+                    frameBuffers[frameId].resize(offset + dataSize);
+                }
+                
+                // Copy chunk data
+                memcpy(frameBuffers[frameId].data() + offset, 
+                       buffer + CHUNK_HEADER_SIZE, 
+                       dataSize);
+
+                // Check if we have all chunks for this frame
+                if (frameBuffers[frameId].size() >= 
+                    (expectedChunks[frameId] * (65507 - CHUNK_HEADER_SIZE))) {
+                    // Pass the complete frame to DecompressionManager
+                    decompManager->addCompressedFrame(std::move(frameBuffers[frameId]));
                     
-                    // Reset for next frame
-                    receivedData = std::vector<char>();
-                    waitingForSize = true;
+                    // Cleanup
+                    frameBuffers.erase(frameId);
+                    expectedChunks.erase(frameId);
                 }
             }
         }
