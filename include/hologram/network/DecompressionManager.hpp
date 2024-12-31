@@ -1,14 +1,16 @@
 #pragma once
 
+#include <memory>
+#include <vector>
+#include <thread>
+#include <deque>
+#include <atomic>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <thread>
 #include <mutex>
-#include <atomic>
-#include <deque>
-#include <vector>
 #include <condition_variable>
-#include "network/CompressionScheme.hpp"
+
+#include "hologram/compression/CompressionScheme.hpp"
 
 class DecompressionManager {
 public:

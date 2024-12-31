@@ -1,4 +1,4 @@
-#include "network/OctreeCompression.hpp"
+#include "hologram/compression/OctreeCompression.hpp"
 #include <sstream>
 
 OctreeCompression::OctreeCompression()

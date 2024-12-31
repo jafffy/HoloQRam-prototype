@@ -1,6 +1,6 @@
-#include "network/CompressionScheme.hpp"
-#include "network/OctreeCompression.hpp"
-#include "network/RLECompression.hpp"
+#include "hologram/compression/CompressionScheme.hpp"
+#include "hologram/compression/OctreeCompression.hpp"
+#include "hologram/compression/RLECompression.hpp"
 #include <stdexcept>
 
 std::unique_ptr<CompressionScheme> CompressionScheme::create(const std::string& scheme) {

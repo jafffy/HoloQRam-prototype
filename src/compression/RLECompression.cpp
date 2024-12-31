@@ -1,4 +1,4 @@
-#include "network/RLECompression.hpp"
+#include "hologram/compression/RLECompression.hpp"
 #include <cstring>
 
 void RLECompression::compress(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud, std::vector<char>& compressedData) {

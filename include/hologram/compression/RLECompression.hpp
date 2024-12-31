@@ -1,6 +1,6 @@
 #pragma once
 
-#include "network/CompressionScheme.hpp"
+#include "hologram/compression/CompressionScheme.hpp"
 
 class RLECompression : public CompressionScheme {
 public:

@@ -1,9 +1,11 @@
 #pragma once
 
+#include <string>
+#include <memory>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <netinet/in.h>
-#include "network/CompressionScheme.hpp"
+#include "hologram/compression/CompressionScheme.hpp"
 
 class VolumetricServer {
 public:

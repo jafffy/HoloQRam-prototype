@@ -1,4 +1,4 @@
-#include "VolumetricClient.hpp"
+#include "hologram/network/VolumetricClient.hpp"
 #include <iostream>
 
 int main(int argc, char* argv[]) {

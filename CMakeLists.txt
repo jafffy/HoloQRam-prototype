@@ -5,6 +5,11 @@ project(holoQRam)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Set PCL directory if not set
+if(NOT PCL_DIR)
+    set(PCL_DIR "/usr/lib/x86_64-linux-gnu/cmake/pcl")
+endif()
+
 # Find required packages
 find_package(PCL 1.8 REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -19,14 +24,14 @@ target_include_directories(glad PUBLIC external/glad/include)
 
 # Common source files for compression schemes
 set(COMPRESSION_SOURCES
-    src/network/CompressionScheme.cpp
-    src/network/OctreeCompression.cpp
-    src/network/RLECompression.cpp
+    src/compression/CompressionScheme.cpp
+    src/compression/OctreeCompression.cpp
+    src/compression/RLECompression.cpp
 )
 
 # Client source files
 set(CLIENT_SOURCES
-    src/main.cpp
+    src/apps/client_main.cpp
     src/network/VolumetricClient.cpp
     src/network/BaseClient.cpp
     src/core/Camera.cpp
@@ -39,7 +44,7 @@ set(CLIENT_SOURCES
 
 # Off-screen client source files
 set(OFFSCREEN_CLIENT_SOURCES
-    src/offscreen_main.cpp
+    src/apps/offscreen_main.cpp
     src/network/OffscreenClient.cpp
     src/network/BaseClient.cpp
     src/network/NetworkManager.cpp
@@ -49,15 +54,16 @@ set(OFFSCREEN_CLIENT_SOURCES
 
 # Server source files
 set(SERVER_SOURCES
-    src/server/src/main.cpp
-    src/server/src/VolumetricServer.cpp
+    src/apps/server_main.cpp
+    src/server/VolumetricServer.cpp
     ${COMPRESSION_SOURCES}
 )
 
 # Common include directories
 set(COMMON_INCLUDE_DIRS
     ${PCL_INCLUDE_DIRS}
-    include
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include/hologram
 )
 
 # Client executable
@@ -66,9 +72,6 @@ target_include_directories(client PRIVATE
     ${COMMON_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
     ${FREETYPE_INCLUDE_DIRS}
-    include/core
-    include/graphics
-    include/network
 )
 target_link_libraries(client PRIVATE
     ${PCL_LIBRARIES}
@@ -82,7 +85,6 @@ target_link_libraries(client PRIVATE
 add_executable(offscreen_client ${OFFSCREEN_CLIENT_SOURCES})
 target_include_directories(offscreen_client PRIVATE
     ${COMMON_INCLUDE_DIRS}
-    include/network
 )
 target_link_libraries(offscreen_client PRIVATE
     ${PCL_LIBRARIES}
@@ -94,8 +96,6 @@ target_link_libraries(offscreen_client PRIVATE
 add_executable(server ${SERVER_SOURCES})
 target_include_directories(server PRIVATE
     ${COMMON_INCLUDE_DIRS}
-    include/server
-    include/network
 )
 target_link_libraries(server PRIVATE
     ${PCL_LIBRARIES}

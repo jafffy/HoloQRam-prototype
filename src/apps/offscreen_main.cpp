@@ -1,4 +1,4 @@
-#include "network/OffscreenClient.hpp"
+#include "hologram/network/OffscreenClient.hpp"
 #include <iostream>
 #include <csignal>
 

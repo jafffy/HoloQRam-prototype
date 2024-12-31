@@ -1,4 +1,4 @@
-#include "server/VolumetricServer.hpp"
+#include "hologram/server/VolumetricServer.hpp"
 #include <iostream>
 #include <string>
 

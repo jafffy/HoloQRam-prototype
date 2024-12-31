@@ -1,6 +1,6 @@
 #pragma once
 
-#include "network/CompressionScheme.hpp"
+#include "hologram/compression/CompressionScheme.hpp"
 #include <pcl/compression/octree_pointcloud_compression.h>
 
 class OctreeCompression : public CompressionScheme {
