@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
+set(PCL_DIR "/usr/local/share/pcl-1.8")
 find_package(PCL 1.8 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
@@ -50,6 +51,7 @@ target_link_libraries(client PRIVATE
     glfw
     glad
     ${FREETYPE_LIBRARIES}
+    pthread
 )
 
 # Server executable
