@@ -21,6 +21,7 @@ target_include_directories(glad PUBLIC external/glad/include)
 set(CLIENT_SOURCES
     src/main.cpp
     src/network/VolumetricClient.cpp
+    src/network/BaseClient.cpp
     src/core/Camera.cpp
     src/network/NetworkManager.cpp
     src/network/DecompressionManager.cpp
@@ -32,6 +33,7 @@ set(CLIENT_SOURCES
 set(OFFSCREEN_CLIENT_SOURCES
     src/offscreen_main.cpp
     src/network/OffscreenClient.cpp
+    src/network/BaseClient.cpp
     src/network/NetworkManager.cpp
     src/network/DecompressionManager.cpp
 )

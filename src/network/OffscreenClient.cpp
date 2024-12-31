@@ -1,7 +1,6 @@
 #include "network/OffscreenClient.hpp"
 #include "network/NetworkManager.hpp"
 #include "network/DecompressionManager.hpp"
-
 #include <iostream>
 #include <iomanip>
 #include <chrono>
@@ -9,37 +8,16 @@
 #include <random>
 
 OffscreenClient::OffscreenClient()
-    : shouldStop(false)
+    : BaseClient()
     , frameCount(0)
     , currentFPS(0.0)
     , avgRenderTime(0.0)
 {
-    try {
-        // Initialize components
-        decompressionManager = std::make_unique<DecompressionManager>();
-        networkManager = std::make_unique<NetworkManager>(decompressionManager.get());
-
-        // Start network and decompression threads
-        decompressionManager->start();
-        networkManager->start();
-
-        // Initialize timing
-        lastFrameTime = std::chrono::steady_clock::now();
-        lastFPSUpdate = std::chrono::steady_clock::now();
-    }
-    catch (const std::exception& e) {
-        // Clean up in case of initialization failure
-        networkManager.reset();
-        decompressionManager.reset();
-        throw;
-    }
+    lastFrameTime = std::chrono::steady_clock::now();
+    lastFPSUpdate = std::chrono::steady_clock::now();
 }
 
-OffscreenClient::~OffscreenClient() {
-    shouldStop = true;
-    networkManager.reset();
-    decompressionManager.reset();
-}
+OffscreenClient::~OffscreenClient() = default;
 
 void OffscreenClient::mockRendering(const std::vector<float>& vertices) {
     // Simulate rendering time based on point cloud size
@@ -93,7 +71,7 @@ void OffscreenClient::run() {
 
     while (!shouldStop) {
         // Get next frame if available
-        if (decompressionManager->getNextDecompressedFrame(currentVertices)) {
+        if (getNextFrame(currentVertices)) {
             // Mock rendering with sleep
             mockRendering(currentVertices);
         }

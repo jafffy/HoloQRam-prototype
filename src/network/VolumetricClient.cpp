@@ -1,16 +1,22 @@
 #include "network/VolumetricClient.hpp"
 #include "graphics/RenderManager.hpp"
 #include "core/Camera.hpp"
-#include "network/NetworkManager.hpp"
-#include "network/DecompressionManager.hpp"
 #include <iostream>
 
 VolumetricClient::VolumetricClient()
-    : lastX(640.0f)
+    : BaseClient()
+    , lastX(640.0f)
     , lastY(360.0f)
     , firstMouse(true)
-    , shouldStop(false)
 {
+    initializeGraphics();
+}
+
+VolumetricClient::~VolumetricClient() {
+    cleanupGraphics();
+}
+
+void VolumetricClient::initializeGraphics() {
     // Initialize GLFW
     if (!glfwInit()) {
         throw std::runtime_error("Failed to initialize GLFW");
@@ -38,23 +44,13 @@ VolumetricClient::VolumetricClient()
     }
 
     try {
-        // Initialize components in the correct order
+        // Initialize graphics components
         camera = std::make_unique<Camera>();
-        decompressionManager = std::make_unique<DecompressionManager>();
-        networkManager = std::make_unique<NetworkManager>(decompressionManager.get());
         renderManager = std::make_unique<RenderManager>(window, camera.get(), networkManager.get());
-
-        // Initialize render manager (requires OpenGL context)
         renderManager->initialize();
-
-        // Start network and decompression threads
-        decompressionManager->start();  // Start decompression first
-        networkManager->start();        // Then start network to receive frames
     }
     catch (const std::exception& e) {
         // Clean up in case of initialization failure
-        networkManager.reset();
-        decompressionManager.reset();
         renderManager.reset();
         camera.reset();
         
@@ -63,17 +59,12 @@ VolumetricClient::VolumetricClient()
         }
         glfwTerminate();
         
-        throw;  // Re-throw the exception
+        throw;
     }
 }
 
-VolumetricClient::~VolumetricClient() {
-    shouldStop = true;
-
-    // Stop components in reverse order
+void VolumetricClient::cleanupGraphics() {
     renderManager.reset();
-    decompressionManager.reset();
-    networkManager.reset();
     camera.reset();
 
     if (window) {
@@ -139,7 +130,7 @@ void VolumetricClient::run() {
         processInput();
 
         // Get next frame if available
-        if (decompressionManager->getNextDecompressedFrame(currentVertices)) {
+        if (getNextFrame(currentVertices)) {
             renderManager->render(currentVertices);
         } else {
             // Render previous frame if no new frame is available

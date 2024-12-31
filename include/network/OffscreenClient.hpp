@@ -1,28 +1,16 @@
 #pragma once
 
-#include <memory>
-#include <atomic>
-#include <vector>
+#include "network/BaseClient.hpp"
 #include <chrono>
 
-// Forward declarations
-class NetworkManager;
-class DecompressionManager;
-
-class OffscreenClient {
+class OffscreenClient : public BaseClient {
 public:
     OffscreenClient();
-    ~OffscreenClient();
+    ~OffscreenClient() override;
     
-    void run();
+    void run() override;
 
 private:
-    // Core components
-    std::unique_ptr<NetworkManager> networkManager;
-    std::unique_ptr<DecompressionManager> decompressionManager;
-    
-    std::atomic<bool> shouldStop;
-    
     // Performance metrics
     std::chrono::steady_clock::time_point lastFrameTime;
     int frameCount;

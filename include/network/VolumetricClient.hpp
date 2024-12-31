@@ -2,39 +2,32 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <memory>
-#include <atomic>
+#include "network/BaseClient.hpp"
 
 // Forward declarations
-class NetworkManager;
 class RenderManager;
-class DecompressionManager;
-class TextRenderer;
 class Camera;
 
-class VolumetricClient {
+class VolumetricClient : public BaseClient {
 public:
     VolumetricClient();
-    ~VolumetricClient();
+    ~VolumetricClient() override;
     
-    void run();
+    void run() override;
 
 private:
-    void processInput();
-    void processMouse(double xpos, double ypos);
-    static void mouseCallback(GLFWwindow* window, double xpos, double ypos);
-
-    // Core components
-    std::unique_ptr<NetworkManager> networkManager;
-    std::unique_ptr<RenderManager> renderManager;
-    std::unique_ptr<DecompressionManager> decompressionManager;
-    std::unique_ptr<Camera> camera;
-    
-    // Window management
     GLFWwindow* window;
-    std::atomic<bool> shouldStop;
-
-    // Mouse state
-    float lastX, lastY;
+    std::unique_ptr<Camera> camera;
+    std::unique_ptr<RenderManager> renderManager;
+    
+    // Mouse handling
+    float lastX;
+    float lastY;
     bool firstMouse;
+    
+    static void mouseCallback(GLFWwindow* window, double xpos, double ypos);
+    void processMouse(double xpos, double ypos);
+    void processInput();
+    void initializeGraphics();
+    void cleanupGraphics();
 }; 
