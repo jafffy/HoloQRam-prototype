@@ -21,7 +21,24 @@ void OctreeCompression::compress(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& c
 }
 
 void OctreeCompression::decompress(const std::vector<char>& compressedData, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud) {
+    // Clear existing cloud and reserve approximate space
+    cloud->clear();
+    cloud->reserve(100000);  // Reserve space for 100k points - adjust based on your typical point cloud size
+    
+    // Create stringstream from compressed data
     std::stringstream compressed;
     compressed.write(compressedData.data(), compressedData.size());
-    decompressor.decodePointCloud(compressed, cloud);
+    
+    try {
+        decompressor.decodePointCloud(compressed, cloud);
+    } catch (const std::bad_alloc& e) {
+        // If allocation fails, try with a smaller reserve
+        cloud->clear();
+        cloud->reserve(50000);  // Try with 50k points
+        compressed.seekg(0);  // Reset stream position
+        decompressor.decodePointCloud(compressed, cloud);
+    }
+    
+    // Shrink to fit actual size
+    cloud->points.shrink_to_fit();
 } 
