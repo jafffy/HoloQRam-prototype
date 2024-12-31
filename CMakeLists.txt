@@ -9,6 +9,7 @@ find_package(OpenGL REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(PCL 1.10 REQUIRED)
+find_package(Freetype REQUIRED)
 
 # Add external dependencies
 include(FetchContent)
@@ -31,6 +32,7 @@ include_directories(${PCL_INCLUDE_DIRS})
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${glad_SOURCE_DIR}/include)
 include_directories(${glm_SOURCE_DIR})
+include_directories(${FREETYPE_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
@@ -48,4 +50,5 @@ target_link_libraries(client
     ${OPENGL_LIBRARIES}
     glfw
     ${PCL_LIBRARIES}
+    ${FREETYPE_LIBRARIES}
 ) 

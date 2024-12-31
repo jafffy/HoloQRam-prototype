@@ -10,12 +10,20 @@
 #include <unistd.h>
 
 #include <iostream>
+#include <iomanip>
 #include <thread>
 #include <mutex>
 #include <vector>
+#include <chrono>
+#include <sstream>
+#include <map>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <deque>
+#include <numeric>
 
 // Shader sources
 const char* vertexShaderSource = R"(
@@ -42,6 +50,42 @@ const char* fragmentShaderSource = R"(
     }
 )";
 
+// Add text rendering shaders
+const char* textVertexShaderSource = R"(
+    #version 330 core
+    layout (location = 0) in vec4 vertex; // <vec2 pos, vec2 tex>
+    out vec2 TexCoords;
+    
+    uniform mat4 projection;
+    
+    void main() {
+        gl_Position = projection * vec4(vertex.xy, 0.0, 1.0);
+        TexCoords = vertex.zw;
+    }
+)";
+
+const char* textFragmentShaderSource = R"(
+    #version 330 core
+    in vec2 TexCoords;
+    out vec4 color;
+    
+    uniform sampler2D text;
+    uniform vec3 textColor;
+    
+    void main() {
+        vec4 sampled = vec4(1.0, 1.0, 1.0, texture(text, TexCoords).r);
+        color = vec4(textColor, 1.0) * sampled;
+    }
+)";
+
+// Text rendering character structure
+struct Character {
+    unsigned int TextureID;  // ID handle of the glyph texture
+    glm::ivec2   Size;      // Size of glyph
+    glm::ivec2   Bearing;   // Offset from baseline to left/top of glyph
+    unsigned int Advance;    // Offset to advance to next glyph
+};
+
 class VolumetricClient {
 public:
     VolumetricClient() : window(nullptr), shaderProgram(0), 
@@ -49,10 +93,16 @@ public:
                         cameraFront(0.0f, 0.0f, -1.0f),
                         cameraUp(0.0f, 1.0f, 0.0f),
                         lastX(400), lastY(300), yaw(-90.0f), pitch(0.0f),
-                        firstMouse(true) {
+                        firstMouse(true),
+                        totalBytesReceived(0),
+                        lastBandwidthCheck(std::chrono::steady_clock::now()),
+                        currentBandwidth(0.0),
+                        currentRTT(0.0),
+                        lastPacketSentTime(std::chrono::steady_clock::now()) {
         setupSocket();
         initializeGL();
         setupShaders();
+        setupTextRendering();
         
         // Start receiving thread
         receiveThread = std::thread(&VolumetricClient::receiveData, this);
@@ -93,6 +143,24 @@ private:
     float yaw, pitch;
     bool firstMouse;
 
+    // Bandwidth measurement variables
+    std::atomic<uint64_t> totalBytesReceived;
+    std::chrono::steady_clock::time_point lastBandwidthCheck;
+    std::atomic<double> currentBandwidth;  // in MB/s
+    std::mutex bandwidthMutex;
+
+    // RTT measurement variables
+    std::chrono::steady_clock::time_point lastPacketSentTime;
+    std::atomic<double> currentRTT;
+    std::mutex rttMutex;
+    std::deque<double> rttHistory;
+    static const size_t RTT_HISTORY_SIZE = 10;  // Keep last 10 measurements for averaging
+
+    // Text rendering members
+    unsigned int textShaderProgram;
+    unsigned int textVAO, textVBO;
+    std::map<char, Character> characters;
+    
     static void mouseCallback(GLFWwindow* window, double xpos, double ypos) {
         VolumetricClient* client = static_cast<VolumetricClient*>(glfwGetWindowUserPointer(window));
         client->processMouse(xpos, ypos);
@@ -212,6 +280,179 @@ private:
         glGenBuffers(1, &VBO);
     }
 
+    void setupTextRendering() {
+        // Initialize FreeType
+        FT_Library ft;
+        if (FT_Init_FreeType(&ft)) {
+            std::cerr << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+            return;
+        }
+
+        // Load font
+        FT_Face face;
+        if (FT_New_Face(ft, "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", 0, &face)) {
+            std::cerr << "ERROR::FREETYPE: Failed to load font" << std::endl;
+            return;
+        }
+
+        // Set font size (0 width means dynamically calculate width based on height)
+        FT_Set_Pixel_Sizes(face, 0, 48); // Increased font size to 48 pixels
+
+        // Enable blending for text
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Disable byte-alignment restriction
+
+        // Load first 128 characters of ASCII set
+        for (unsigned char c = 0; c < 128; c++) {
+            if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
+                std::cerr << "ERROR::FREETYTPE: Failed to load Glyph" << std::endl;
+                continue;
+            }
+
+            // Generate texture
+            unsigned int texture;
+            glGenTextures(1, &texture);
+            glBindTexture(GL_TEXTURE_2D, texture);
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RED,
+                face->glyph->bitmap.width,
+                face->glyph->bitmap.rows,
+                0,
+                GL_RED,
+                GL_UNSIGNED_BYTE,
+                face->glyph->bitmap.buffer
+            );
+
+            // Set texture options
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+            // Store character for later use
+            Character character = {
+                texture,
+                glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+                glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+                static_cast<unsigned int>(face->glyph->advance.x)
+            };
+            characters.insert(std::pair<char, Character>(c, character));
+        }
+
+        // Cleanup FreeType resources
+        FT_Done_Face(face);
+        FT_Done_FreeType(ft);
+
+        // Configure VAO/VBO for texture quads
+        glGenVertexArrays(1, &textVAO);
+        glGenBuffers(1, &textVBO);
+        glBindVertexArray(textVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
+        // Create and compile the text shader program
+        unsigned int textVertexShader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(textVertexShader, 1, &textVertexShaderSource, NULL);
+        glCompileShader(textVertexShader);
+
+        unsigned int textFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(textFragmentShader, 1, &textFragmentShaderSource, NULL);
+        glCompileShader(textFragmentShader);
+
+        textShaderProgram = glCreateProgram();
+        glAttachShader(textShaderProgram, textVertexShader);
+        glAttachShader(textShaderProgram, textFragmentShader);
+        glLinkProgram(textShaderProgram);
+
+        glDeleteShader(textVertexShader);
+        glDeleteShader(textFragmentShader);
+    }
+
+    void renderText(const std::string& text, float x, float y, float scale, glm::vec3 color) {
+        glUseProgram(textShaderProgram);
+        glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(1280), 0.0f, static_cast<float>(720));
+        glUniformMatrix4fv(glGetUniformLocation(textShaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniform3f(glGetUniformLocation(textShaderProgram, "textColor"), color.x, color.y, color.z);
+        
+        glActiveTexture(GL_TEXTURE0);
+        glBindVertexArray(textVAO);
+
+        float originalX = x;
+        for (char c : text) {
+            Character ch = characters[c];
+
+            float xpos = x + ch.Bearing.x * scale;
+            float ypos = y - (ch.Size.y - ch.Bearing.y) * scale;
+
+            float w = ch.Size.x * scale;
+            float h = ch.Size.y * scale;
+
+            float vertices[6][4] = {
+                { xpos,     ypos + h,   0.0f, 0.0f },            
+                { xpos,     ypos,       0.0f, 1.0f },
+                { xpos + w, ypos,       1.0f, 1.0f },
+
+                { xpos,     ypos + h,   0.0f, 0.0f },
+                { xpos + w, ypos,       1.0f, 1.0f },
+                { xpos + w, ypos + h,   1.0f, 0.0f }           
+            };
+
+            glBindTexture(GL_TEXTURE_2D, ch.TextureID);
+            glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+
+            x += (ch.Advance >> 6) * scale;
+        }
+        glBindVertexArray(0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+
+    void updateBandwidth(size_t newBytes) {
+        totalBytesReceived += newBytes;
+        
+        auto now = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastBandwidthCheck).count();
+        
+        // Update bandwidth every second
+        if (duration >= 1000) {
+            std::lock_guard<std::mutex> lock(bandwidthMutex);
+            double seconds = duration / 1000.0;
+            currentBandwidth = (totalBytesReceived / (1024.0 * 1024.0)) / seconds; // Convert to MB/s
+            
+            // Print bandwidth
+            std::cout << "\rBandwidth: " << std::fixed << std::setprecision(2) 
+                      << currentBandwidth << " MB/s" << std::flush;
+            
+            // Reset counters
+            totalBytesReceived = 0;
+            lastBandwidthCheck = now;
+        }
+    }
+
+    void updateRTT() {
+        auto now = std::chrono::steady_clock::now();
+        double rtt = std::chrono::duration_cast<std::chrono::microseconds>(now - lastPacketSentTime).count() / 1000.0; // Convert to milliseconds
+
+        std::lock_guard<std::mutex> lock(rttMutex);
+        rttHistory.push_back(rtt);
+        if (rttHistory.size() > RTT_HISTORY_SIZE) {
+            rttHistory.pop_front();
+        }
+        
+        // Calculate average RTT
+        currentRTT = std::accumulate(rttHistory.begin(), rttHistory.end(), 0.0) / rttHistory.size();
+    }
+
     void receiveData() {
         char buffer[65507];
         std::vector<char> receivedData;
@@ -221,12 +462,19 @@ private:
         while (true) {
             ssize_t bytesReceived = recv(sockfd, buffer, sizeof(buffer), 0);
             if (bytesReceived > 0) {
+                // Update bandwidth and RTT measurements
+                updateBandwidth(bytesReceived);
+                updateRTT();
+
                 if (waitingForSize) {
                     // First packet contains the size
                     if (bytesReceived >= sizeof(uint32_t)) {
                         expectedSize = *reinterpret_cast<uint32_t*>(buffer);
                         receivedData.reserve(expectedSize);
                         waitingForSize = false;
+                        
+                        // Update last packet sent time for next RTT measurement
+                        lastPacketSentTime = std::chrono::steady_clock::now();
                     }
                 } else {
                     // Append received data
@@ -306,6 +554,20 @@ private:
 
             // Draw points
             glDrawArrays(GL_POINTS, 0, vertices.size() / 6);
+        }
+
+        // Render network statistics
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(2) 
+           << "Bandwidth: " << currentBandwidth << " MB/s\n"
+           << "RTT: " << currentRTT << " ms";
+        
+        // Render each line of text
+        std::string line;
+        float y_position = 650.0f;
+        while (std::getline(ss, line)) {
+            renderText(line, 25.0f, y_position, 0.75f, glm::vec3(1.0f, 1.0f, 0.0f));
+            y_position -= 50.0f;  // Move down for next line
         }
     }
 };
