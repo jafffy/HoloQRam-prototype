@@ -5,50 +5,54 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
+find_package(PCL 1.8 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(PCL 1.10 REQUIRED)
 find_package(Freetype REQUIRED)
 
-# Add external dependencies
-include(FetchContent)
-FetchContent_Declare(
-    glad
-    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
-    GIT_TAG master
+# Add glad library
+add_library(glad
+    external/glad/src/glad.c
+)
+target_include_directories(glad PUBLIC external/glad/include)
+
+# Client source files
+set(CLIENT_SOURCES
+    src/main.cpp
+    src/VolumetricClient.cpp
+    src/Camera.cpp
+    src/NetworkManager.cpp
+    src/DecompressionManager.cpp
+    src/RenderManager.cpp
+    src/TextRenderer.cpp
 )
 
-FetchContent_Declare(
-    glm
-    GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG master
-)
-
-FetchContent_MakeAvailable(glad glm)
-
-# Include directories
-include_directories(${PCL_INCLUDE_DIRS})
-include_directories(${OpenCV_INCLUDE_DIRS})
-include_directories(${glad_SOURCE_DIR}/include)
-include_directories(${glm_SOURCE_DIR})
-include_directories(${FREETYPE_INCLUDE_DIRS})
-link_directories(${PCL_LIBRARY_DIRS})
-add_definitions(${PCL_DEFINITIONS})
-
-# Server executable
-add_executable(server src/server.cpp)
-target_link_libraries(server
-    ${PCL_LIBRARIES}
-    ${OpenCV_LIBS}
+# Server source files
+set(SERVER_SOURCES
+    src/server.cpp
 )
 
 # Client executable
-add_executable(client src/client.cpp)
-target_link_libraries(client
-    glad
+add_executable(client ${CLIENT_SOURCES})
+target_include_directories(client PRIVATE
+    ${PCL_INCLUDE_DIRS}
+    ${OPENGL_INCLUDE_DIR}
+    ${FREETYPE_INCLUDE_DIRS}
+    src
+)
+target_link_libraries(client PRIVATE
+    ${PCL_LIBRARIES}
     ${OPENGL_LIBRARIES}
     glfw
-    ${PCL_LIBRARIES}
+    glad
     ${FREETYPE_LIBRARIES}
+)
+
+# Server executable
+add_executable(server ${SERVER_SOURCES})
+target_include_directories(server PRIVATE
+    ${PCL_INCLUDE_DIRS}
+)
+target_link_libraries(server PRIVATE
+    ${PCL_LIBRARIES}
 ) 
