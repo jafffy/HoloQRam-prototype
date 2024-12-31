@@ -1,11 +1,13 @@
-#include "graphics/RenderManager.hpp"
-#include "graphics/Shaders.hpp"
-#include "core/Camera.hpp"
-#include "network/NetworkManager.hpp"
+#include "hologram/graphics/RenderManager.hpp"
+#include "hologram/graphics/Shaders.hpp"
+#include "hologram/core/Camera.hpp"
+#include "hologram/network/NetworkManager.hpp"
 #include <iostream>
 #include <numeric>
 #include <sstream>
 #include <iomanip>
+
+namespace hologram {
 
 RenderManager::RenderManager(GLFWwindow* window, Camera* camera, NetworkManager* networkManager)
     : window(window)
@@ -107,7 +109,7 @@ void RenderManager::render(const std::vector<float>& vertices) {
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (!vertices.empty()) {
+    if (!vertices.empty() && camera) {
         glUseProgram(shaderProgram);
 
         // Set up transformation matrices
@@ -140,6 +142,8 @@ void RenderManager::render(const std::vector<float>& vertices) {
 }
 
 void RenderManager::renderStats() {
+    if (!networkManager) return;
+
     std::stringstream ss;
     ss << std::fixed << std::setprecision(2) 
        << "FPS: " << currentFPS << "\n"
@@ -153,4 +157,6 @@ void RenderManager::renderStats() {
         textRenderer->renderText(line, 25.0f, y_position, 0.75f, glm::vec3(1.0f, 1.0f, 0.0f));
         y_position -= 30.0f;  // Adjust spacing between lines
     }
-} 
+}
+
+} // namespace hologram 

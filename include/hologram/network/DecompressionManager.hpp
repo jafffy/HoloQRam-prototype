@@ -9,6 +9,8 @@
 #include <condition_variable>
 #include <thread>
 
+namespace hologram {
+
 class DecompressionManager {
 public:
     explicit DecompressionManager(const std::string& compressionScheme);
@@ -50,4 +52,6 @@ private:
     std::condition_variable cloudCV;
 
     static constexpr size_t MAX_QUEUE_SIZE = 30;
-}; 
+};
+
+} // namespace hologram 

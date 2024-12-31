@@ -1,8 +1,13 @@
 #pragma once
 
+// PCL includes
 #include <pcl-1.10/pcl/point_types.h>
 #include <pcl-1.10/pcl/point_cloud.h>
+
+// GLM includes
 #include <glm/glm.hpp>
+
+// Standard library includes
 #include <vector>
 #include <memory>
 #include <unordered_map>

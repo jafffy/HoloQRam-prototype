@@ -1,36 +1,50 @@
 #pragma once
 
-#include "network/BaseClient.hpp"
+// Standard includes
+#include <memory>
+#include <atomic>
 #include <chrono>
-#include <random>
-#include <sstream>
+
+// Boost includes (before PCL)
+#include <boost/concept_check.hpp>
+
+// PCL includes
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+
+// Project includes
+#include "hologram/network/BaseClient.hpp"
+#include "hologram/network/NetworkManager.hpp"
+#include "hologram/network/DecompressionManager.hpp"
+
+namespace hologram {
 
 class OffscreenClient : public BaseClient {
 public:
-    OffscreenClient();
+    OffscreenClient(const std::string& compressionScheme = "vivo",
+                    const std::string& serverIP = "127.0.0.1",
+                    int serverPort = 8765);
     ~OffscreenClient() override;
-    
+
     void run() override;
 
 private:
+    std::unique_ptr<NetworkManager> networkManager;
+    std::unique_ptr<DecompressionManager> decompressionManager;
+    std::atomic<bool> running;
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr getNextFrame();
+    void updateMetrics();
+    void displayMetrics();
+
     // Performance metrics
+    double fps;
+    double bandwidth;
+    double latency;
+    std::chrono::steady_clock::time_point lastMetricsUpdate;
     std::chrono::steady_clock::time_point lastFrameTime;
     int frameCount;
-    std::chrono::steady_clock::time_point lastFPSUpdate;
-    std::chrono::steady_clock::time_point lastMetricsDisplay;
-    double currentFPS;
-    double avgRenderTime;
-    
-    // Random number generation for mock rendering
-    std::mt19937 rng;
-    std::uniform_real_distribution<double> renderTimeDistribution;
-    
-    // Buffer for metrics display
-    std::stringstream metricsBuffer;
-    static constexpr double METRICS_UPDATE_INTERVAL = 0.25; // Update display 4 times per second
-    
-    void mockRendering(const std::vector<float>& vertices);
-    void updatePerformanceMetrics();
-    void displayMetrics();
-    void clearMetricsBuffer();
-}; 
+    static constexpr double METRICS_UPDATE_INTERVAL = 0.5; // seconds
+};
+
+} // namespace hologram 

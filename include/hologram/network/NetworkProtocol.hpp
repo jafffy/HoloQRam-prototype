@@ -1,8 +1,11 @@
 #pragma once
 
+// Standard library includes
 #include <cstdint>
 #include <chrono>
 #include <vector>
+
+namespace hologram {
 
 // Network constants
 constexpr uint16_t DEFAULT_PORT = 8765;
@@ -76,4 +79,6 @@ inline bool isSequenceNewer(uint32_t seq1, uint32_t seq2) {
     const uint32_t HALF_MAX = UINT32_MAX / 2;
     return (seq1 > seq2 && seq1 - seq2 <= HALF_MAX) ||
            (seq1 < seq2 && seq2 - seq1 > HALF_MAX);
-} 
+}
+
+} // namespace hologram 

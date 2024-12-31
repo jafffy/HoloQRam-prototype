@@ -1,9 +1,12 @@
 #pragma once
 
+// Standard includes
 #include <memory>
 #include <atomic>
 #include <vector>
 #include <string>
+
+namespace hologram {
 
 // Forward declarations
 class NetworkManager;
@@ -28,4 +31,6 @@ protected:
     bool getNextFrame(std::vector<float>& currentVertices);
     void initializeNetworking();
     void cleanupNetworking();
-}; 
+};
+
+} // namespace hologram 

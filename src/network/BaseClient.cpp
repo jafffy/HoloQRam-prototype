@@ -1,13 +1,15 @@
-#include "network/BaseClient.hpp"
-#include "network/NetworkManager.hpp"
-#include "network/DecompressionManager.hpp"
-
+#include "hologram/network/BaseClient.hpp"
+#include "hologram/network/NetworkManager.hpp"
+#include "hologram/network/DecompressionManager.hpp"
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <iostream>
+
+namespace hologram {
 
 BaseClient::BaseClient(const std::string& compressionScheme)
     : shouldStop(false)
     , compressionScheme(compressionScheme) {
-    initializeNetworking();
 }
 
 BaseClient::~BaseClient() {
@@ -16,16 +18,10 @@ BaseClient::~BaseClient() {
 
 void BaseClient::initializeNetworking() {
     try {
-        // Initialize components in the correct order
         decompressionManager = std::make_unique<DecompressionManager>(compressionScheme);
         networkManager = std::make_unique<NetworkManager>(decompressionManager.get());
-
-        // Start network and decompression threads
-        decompressionManager->start();  // Start decompression first
-        networkManager->start();        // Then start network to receive frames
     }
     catch (const std::exception& e) {
-        // Clean up in case of initialization failure
         networkManager.reset();
         decompressionManager.reset();
         throw;
@@ -34,12 +30,25 @@ void BaseClient::initializeNetworking() {
 
 void BaseClient::cleanupNetworking() {
     shouldStop = true;
+    
+    if (networkManager) {
+        networkManager->stop();
+    }
+    if (decompressionManager) {
+        decompressionManager->stop();
+    }
+    
     networkManager.reset();
     decompressionManager.reset();
 }
 
 bool BaseClient::getNextFrame(std::vector<float>& currentVertices) {
+    if (!decompressionManager) {
+        return false;
+    }
+
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+    
     if (!decompressionManager->getDecompressedCloud(cloud)) {
         return false;
     }
@@ -52,5 +61,8 @@ bool BaseClient::getNextFrame(std::vector<float>& currentVertices) {
         currentVertices.push_back(point.y);
         currentVertices.push_back(point.z);
     }
+    
     return true;
-} 
+}
+
+} // namespace hologram 

@@ -14,7 +14,7 @@ namespace hologram {
 
 class VolumetricServer {
 public:
-    VolumetricServer(const std::string& compressionScheme, float cellSize);
+    VolumetricServer(const std::string& compressionScheme, float cellSize, bool verbose = true);
     ~VolumetricServer();
 
     void start();
@@ -22,6 +22,7 @@ public:
 
 private:
     bool running;
+    bool verbose;
     std::unique_ptr<hologram::CompressionScheme> compressor;
     std::unique_ptr<CellManager> cellManager;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;

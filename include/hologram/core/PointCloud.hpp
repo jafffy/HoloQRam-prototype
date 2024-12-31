@@ -1,7 +1,10 @@
 #pragma once
 
+// Standard library includes
 #include <vector>
 #include <memory>
+
+// Third-party includes
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <pcl/point_types.h>
@@ -20,7 +23,9 @@ struct PointXYZRGBNC {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW   // Ensures proper alignment
 } EIGEN_ALIGN16;         // Enforces SSE padding
 
-// Register the custom point type
+} // namespace hologram
+
+// Register the custom point type outside the namespace
 POINT_CLOUD_REGISTER_POINT_STRUCT(hologram::PointXYZRGBNC,
     (float, x, x)
     (float, y, y)
@@ -91,6 +96,4 @@ private:
     
     void buildKdTree();
     void buildOctree(float resolution);
-};
-
-} // namespace hologram 
+}; 

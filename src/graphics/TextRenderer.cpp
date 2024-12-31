@@ -1,8 +1,8 @@
-#include "graphics/RenderManager.hpp"
-#include "graphics/Shaders.hpp"
+#include "hologram/graphics/RenderManager.hpp"
+#include "hologram/graphics/Shaders.hpp"
 #include <iostream>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
+
+namespace hologram {
 
 TextRenderer::TextRenderer()
     : textShaderProgram(0)
@@ -12,13 +12,14 @@ TextRenderer::TextRenderer()
 }
 
 TextRenderer::~TextRenderer() {
-    for (auto& ch : characters) {
-        glDeleteTextures(1, &ch.second.TextureID);
-    }
-    
     if (textVAO) glDeleteVertexArrays(1, &textVAO);
     if (textVBO) glDeleteBuffers(1, &textVBO);
     if (textShaderProgram) glDeleteProgram(textShaderProgram);
+    
+    // Delete textures
+    for (auto& pair : characters) {
+        glDeleteTextures(1, &pair.second.TextureID);
+    }
 }
 
 void TextRenderer::initialize() {
@@ -27,22 +28,25 @@ void TextRenderer::initialize() {
 }
 
 void TextRenderer::setupShader() {
-    // Create and compile the text shader program
-    unsigned int textVertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(textVertexShader, 1, &Shaders::TEXT_VERTEX_SHADER_SOURCE, NULL);
-    glCompileShader(textVertexShader);
+    // Create and compile vertex shader
+    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &Shaders::TEXT_VERTEX_SHADER_SOURCE, NULL);
+    glCompileShader(vertexShader);
 
-    unsigned int textFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(textFragmentShader, 1, &Shaders::TEXT_FRAGMENT_SHADER_SOURCE, NULL);
-    glCompileShader(textFragmentShader);
+    // Create and compile fragment shader
+    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &Shaders::TEXT_FRAGMENT_SHADER_SOURCE, NULL);
+    glCompileShader(fragmentShader);
 
+    // Create shader program
     textShaderProgram = glCreateProgram();
-    glAttachShader(textShaderProgram, textVertexShader);
-    glAttachShader(textShaderProgram, textFragmentShader);
+    glAttachShader(textShaderProgram, vertexShader);
+    glAttachShader(textShaderProgram, fragmentShader);
     glLinkProgram(textShaderProgram);
 
-    glDeleteShader(textVertexShader);
-    glDeleteShader(textFragmentShader);
+    // Delete shaders
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
 
     // Configure VAO/VBO for texture quads
     glGenVertexArrays(1, &textVAO);
@@ -59,22 +63,23 @@ void TextRenderer::setupShader() {
 void TextRenderer::loadFont() {
     FT_Library ft;
     if (FT_Init_FreeType(&ft)) {
-        throw std::runtime_error("ERROR::FREETYPE: Could not init FreeType Library");
+        throw std::runtime_error("Could not init FreeType Library");
     }
 
     FT_Face face;
-    if (FT_New_Face(ft, "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", 0, &face)) {
+    if (FT_New_Face(ft, "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0, &face)) {
         FT_Done_FreeType(ft);
-        throw std::runtime_error("ERROR::FREETYPE: Failed to load font");
+        throw std::runtime_error("Failed to load font");
     }
 
     FT_Set_Pixel_Sizes(face, 0, 48);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Disable byte-alignment restriction
 
     // Load first 128 characters of ASCII set
     for (unsigned char c = 0; c < 128; c++) {
+        // Load character glyph
         if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
-            std::cerr << "ERROR::FREETYTPE: Failed to load Glyph " << c << std::endl;
+            std::cerr << "Failed to load Glyph: " << c << std::endl;
             continue;
         }
 
@@ -110,19 +115,18 @@ void TextRenderer::loadFont() {
         characters.insert(std::pair<char, Character>(c, character));
     }
 
+    // Cleanup
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
 }
 
 void TextRenderer::renderText(const std::string& text, float x, float y, float scale, glm::vec3 color) {
     glUseProgram(textShaderProgram);
-    glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(1280), 0.0f, static_cast<float>(720));
-    glUniformMatrix4fv(glGetUniformLocation(textShaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
     glUniform3f(glGetUniformLocation(textShaderProgram, "textColor"), color.x, color.y, color.z);
-    
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(textVAO);
 
+    // Iterate through all characters
     for (char c : text) {
         Character ch = characters[c];
 
@@ -132,25 +136,30 @@ void TextRenderer::renderText(const std::string& text, float x, float y, float s
         float w = ch.Size.x * scale;
         float h = ch.Size.y * scale;
 
+        // Update VBO for each character
         float vertices[6][4] = {
-            { xpos,     ypos + h,   0.0f, 0.0f },            
+            { xpos,     ypos + h,   0.0f, 0.0f },
             { xpos,     ypos,       0.0f, 1.0f },
             { xpos + w, ypos,       1.0f, 1.0f },
 
             { xpos,     ypos + h,   0.0f, 0.0f },
             { xpos + w, ypos,       1.0f, 1.0f },
-            { xpos + w, ypos + h,   1.0f, 0.0f }           
+            { xpos + w, ypos + h,   1.0f, 0.0f }
         };
 
+        // Render glyph texture over quad
         glBindTexture(GL_TEXTURE_2D, ch.TextureID);
         glBindBuffer(GL_ARRAY_BUFFER, textVBO);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        x += (ch.Advance >> 6) * scale;
+        // Now advance cursors for next glyph
+        x += (ch.Advance >> 6) * scale; // Bitshift by 6 to get value in pixels (2^6 = 64)
     }
-    
+
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
-} 
+}
+
+} // namespace hologram 

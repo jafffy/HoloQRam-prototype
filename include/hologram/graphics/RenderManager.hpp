@@ -17,6 +17,8 @@
 #include <memory>
 #include <chrono>
 
+namespace hologram {
+
 // Forward declarations
 class Camera;
 class NetworkManager;
@@ -75,4 +77,6 @@ private:
     std::deque<double> fpsHistory;
     std::mutex fpsMutex;
     static constexpr size_t FPS_HISTORY_SIZE = 10;
-}; 
+};
+
+} // namespace hologram 

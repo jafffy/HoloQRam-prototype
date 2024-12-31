@@ -3,11 +3,12 @@
 #include <glm/glm.hpp>
 #include <functional>
 
+// GLM hash specialization
 namespace std {
 
 template<>
-struct hash<glm::vec3> {
-    size_t operator()(const glm::vec3& v) const noexcept {
+struct hash<::glm::vec3> {
+    size_t operator()(const ::glm::vec3& v) const noexcept {
         // Simple hash function that combines the components
         return static_cast<size_t>(
             v.x * 73856093 ^

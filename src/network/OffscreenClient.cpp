@@ -1,129 +1,151 @@
-#include "network/OffscreenClient.hpp"
-#include "network/NetworkManager.hpp"
-#include "network/DecompressionManager.hpp"
+#include "hologram/network/OffscreenClient.hpp"
+#include "hologram/network/NetworkManager.hpp"
+#include "hologram/network/DecompressionManager.hpp"
+#include "hologram/network/NetworkProtocol.hpp"
 #include <iostream>
 #include <iomanip>
 #include <chrono>
 #include <thread>
 #include <random>
+#include <sstream>
 
-// Constant for maximum expected points in a frame
-const size_t MAX_POINTS_PER_FRAME = 500000;  // Adjust based on your typical maximum point cloud size
+namespace hologram {
 
-OffscreenClient::OffscreenClient()
-    : BaseClient()
+OffscreenClient::OffscreenClient(const std::string& compressionScheme,
+                               const std::string& serverIP,
+                               int serverPort)
+    : BaseClient(compressionScheme)
+    , running(true)
+    , fps(0.0)
+    , bandwidth(0.0)
+    , latency(0.0)
+    , lastMetricsUpdate(std::chrono::steady_clock::now())
+    , lastFrameTime(std::chrono::steady_clock::now())
     , frameCount(0)
-    , currentFPS(0.0)
-    , avgRenderTime(0.0)
-    , rng(std::random_device{}())  // Initialize with true random seed
-    , renderTimeDistribution(0.8, 1.2)  // ±20% variation
 {
-    lastFrameTime = std::chrono::steady_clock::now();
-    lastFPSUpdate = std::chrono::steady_clock::now();
-    lastMetricsDisplay = std::chrono::steady_clock::now();
-    metricsBuffer.setf(std::ios::fixed, std::ios::floatfield);
-    metricsBuffer.precision(2);
+    // Create managers
+    decompressionManager = std::make_unique<DecompressionManager>(compressionScheme);
+    networkManager = std::make_unique<NetworkManager>(decompressionManager.get(), serverIP, serverPort);
+    
+    // Start managers
+    networkManager->start();
+    decompressionManager->start();
 }
 
 OffscreenClient::~OffscreenClient() {
-    // Ensure proper cleanup
-    shouldStop = true;
-    clearMetricsBuffer();
+    running = false;
+    
+    if (networkManager) {
+        networkManager->stop();
+    }
+    if (decompressionManager) {
+        decompressionManager->stop();
+    }
 }
 
-void OffscreenClient::clearMetricsBuffer() {
-    metricsBuffer.str("");
-    metricsBuffer.clear();
-}
-
-void OffscreenClient::mockRendering(const std::vector<float>& vertices) {
-    // Simulate rendering time based on point cloud size
-    // More points = more rendering time
-    int numPoints = vertices.size() / 6; // 6 floats per point (xyz + rgb)
+void OffscreenClient::updateMetrics() {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastMetricsUpdate).count();
     
-    // Base rendering time: 2ms + 0.01ms per 1000 points
-    double baseTime = 2.0 + (numPoints / 1000.0) * 0.01;
-    
-    // Add random variation (±20%) using member RNG
-    double renderTime = baseTime * renderTimeDistribution(rng);
-    std::this_thread::sleep_for(std::chrono::microseconds(static_cast<int>(renderTime * 1000)));
-    
-    // Update average render time (simple moving average)
-    avgRenderTime = avgRenderTime * 0.95 + renderTime * 0.05;
-}
-
-void OffscreenClient::updatePerformanceMetrics() {
-    auto currentTime = std::chrono::steady_clock::now();
-    frameCount++;
-
-    // Update FPS every second
-    auto timeSinceLastUpdate = std::chrono::duration<double>(currentTime - lastFPSUpdate).count();
-    if (timeSinceLastUpdate >= 1.0) {
-        currentFPS = frameCount / timeSinceLastUpdate;
-        frameCount = 0;
-        lastFPSUpdate = currentTime;
+    if (elapsed >= METRICS_UPDATE_INTERVAL * 1000) {  // Convert to milliseconds
+        // Update FPS based on actual frame count
+        fps = static_cast<double>(frameCount) / (elapsed / 1000.0);
+        
+        std::cout << "[OffscreenClient::updateMetrics] Stats - "
+                  << "Duration: " << elapsed << "ms, "
+                  << "Frame count: " << frameCount << ", "
+                  << "FPS: " << fps << std::endl;
+        
+        frameCount = 0;  // Reset frame counter
+        
+        // Get network metrics
+        if (networkManager) {
+            bandwidth = networkManager->getCurrentBandwidth();
+            latency = networkManager->getCurrentRTT();
+        }
+        
+        lastMetricsUpdate = now;
     }
 }
 
 void OffscreenClient::displayMetrics() {
-    auto currentTime = std::chrono::steady_clock::now();
-    auto timeSinceLastDisplay = std::chrono::duration<double>(currentTime - lastMetricsDisplay).count();
-    
-    // Only update display at specified interval
-    if (timeSinceLastDisplay < METRICS_UPDATE_INTERVAL) {
-        return;
-    }
-    
-    // Clear previous buffer content
-    clearMetricsBuffer();
-    
-    // Build metrics string in buffer
-    metricsBuffer << "\033[2J\033[H"  // Clear screen and move cursor to top
-                 << "Performance Metrics:\n"
-                 << "==================\n"
-                 << "FPS: " << currentFPS << "\n"
-                 << "Bandwidth: " << networkManager->getCurrentBandwidth() << " MB/s\n"
-                 << "RTT: " << networkManager->getCurrentRTT() << " ms\n"
-                 << "Avg Render Time: " << avgRenderTime << " ms\n"
-                 << "Compressed Frames Queue: " << decompressionManager->getCompressedQueueSize() << "\n"
-                 << "Decompressed Frames Queue: " << decompressionManager->getDecompressedQueueSize() << "\n"
-                 << "\nPress Ctrl+C to exit\n";
-    
-    // Write buffer to output and flush
-    std::cout << metricsBuffer.str() << std::flush;
-    
-    lastMetricsDisplay = currentTime;
+    std::cout << "\r[Metrics] FPS: " << std::fixed << std::setprecision(1) << fps
+              << " | Bandwidth: " << std::setprecision(2) << bandwidth << " MB/s"
+              << " | Latency: " << std::setprecision(1) << latency << " ms"
+              << std::flush;
 }
 
 void OffscreenClient::run() {
-    // Pre-allocate vector with maximum expected size
-    // 6 floats per point (xyz + rgb)
-    std::vector<float> currentVertices;
-    currentVertices.reserve(MAX_POINTS_PER_FRAME * 6);
+    // Create initial viewport info
+    ViewportInfo viewport;
+    viewport.position[0] = 0.0f;
+    viewport.position[1] = 0.0f;
+    viewport.position[2] = 0.0f;
+    viewport.rotation[0] = 0.0f;
+    viewport.rotation[1] = 0.0f;
+    viewport.rotation[2] = 0.0f;
+    viewport.fov = 60.0f;
+    viewport.aspectRatio = 16.0f / 9.0f;
+    viewport.nearPlane = 0.1f;
+    viewport.farPlane = 100.0f;
 
-    while (!shouldStop) {
-        // Clear the vector while maintaining capacity
-        currentVertices.clear();
-        
-        // Get next frame if available
-        if (getNextFrame(currentVertices)) {
-            // Check if frame size is within reasonable limits
-            if (currentVertices.size() > MAX_POINTS_PER_FRAME * 6) {
-                std::cerr << "Warning: Received oversized frame with " 
-                         << (currentVertices.size() / 6) << " points" << std::endl;
-            }
+    int failedAttempts = 0;
+    const int MAX_FAILED_ATTEMPTS = 5;
+
+    while (running && !shouldStop) {
+        try {
+            auto now = std::chrono::steady_clock::now();
             
-            // Mock rendering with sleep
-            mockRendering(currentVertices);
+            // Send viewport update
+            if (!networkManager->sendViewportUpdate(viewport)) {
+                std::cerr << "Failed to send viewport update" << std::endl;
+                failedAttempts++;
+                if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    failedAttempts = 0;
+                } else {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                continue;
+            }
+            failedAttempts = 0;
+
+            // Count this as a frame since we successfully sent a viewport update
+            frameCount++;
+
+            // Try to get next frame (point cloud data)
+            auto frame = getNextFrame();
+
+            // Update metrics
+            updateMetrics();
+            displayMetrics();
+
+            // Calculate time spent in this frame
+            auto frameEnd = std::chrono::steady_clock::now();
+            auto frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(frameEnd - now).count();
+            
+            // Sleep for remaining time to maintain target frame rate
+            int targetFrameTime = 33;  // ~30 FPS
+            if (frameTime < targetFrameTime) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(targetFrameTime - frameTime));
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error in run loop: " << e.what() << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
-        
-        updatePerformanceMetrics();
-        displayMetrics();
-        
-        // Cap the update rate to ~60Hz to avoid excessive CPU usage
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
-    
-    // Explicitly free memory at shutdown
-    std::vector<float>().swap(currentVertices);
-} 
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr OffscreenClient::getNextFrame() {
+    if (!decompressionManager) {
+        return nullptr;
+    }
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+    if (decompressionManager->getDecompressedCloud(cloud)) {
+        return cloud;
+    }
+    return nullptr;
+}
+
+} // namespace hologram 

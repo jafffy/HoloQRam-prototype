@@ -1,15 +1,20 @@
 #include "hologram/network/DecompressionManager.hpp"
+#include "hologram/compression/CompressionScheme.hpp"
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <sstream>
 #include <thread>
 #include <chrono>
+#include <iostream>
 
-// Reduce maximum queue sizes to prevent memory buildup
-const size_t MAX_COMPRESSED_FRAMES = 5;    // Reduced from previous value
-const size_t MAX_DECOMPRESSED_FRAMES = 2;  // Reduced from previous value
+namespace hologram {
+
+// Constants for queue sizes
+static constexpr size_t MAX_QUEUE_SIZE = 5;
 
 DecompressionManager::DecompressionManager(const std::string& compressionScheme)
     : running(false)
-    , decompressor(hologram::CompressionScheme::create(compressionScheme))
+    , decompressor(CompressionScheme::create(compressionScheme))
 {
     if (!decompressor) {
         throw std::runtime_error("Failed to create compression scheme: " + compressionScheme);
@@ -21,6 +26,7 @@ DecompressionManager::~DecompressionManager() {
 }
 
 void DecompressionManager::start() {
+    if (running) return;
     running = true;
     decompThread = std::make_unique<std::thread>(&DecompressionManager::decompressFrames, this);
 }
@@ -86,13 +92,9 @@ void DecompressionManager::decompressFrames() {
         }
         
         try {
-            // Create a new point cloud for decompressed data
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-            
-            // Decompress the data
             decompressor->decompress(compressedData, cloud);
             
-            // Add to decompressed queue
             {
                 std::lock_guard<std::mutex> lock(cloudMutex);
                 if (decompressedQueue.size() < MAX_QUEUE_SIZE) {
@@ -105,4 +107,6 @@ void DecompressionManager::decompressFrames() {
             continue;
         }
     }
-} 
+}
+
+} // namespace hologram 

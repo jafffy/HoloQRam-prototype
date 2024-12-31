@@ -1,11 +1,24 @@
 #pragma once
 
-#include "hologram/compression/CompressionScheme.hpp"
+// Standard includes first
+#include <vector>
+#include <memory>
+
+// Boost includes (before PCL to avoid namespace issues)
+#include <boost/concept_check.hpp>
+
+// PCL includes
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl/octree/octree_pointcloud.h>
+#include <pcl/octree/octree_search.h>
+#include <pcl/filters/extract_indices.h>
+
+// GLM includes
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+// Project includes
+#include "hologram/compression/CompressionScheme.hpp"
 
 namespace hologram {
 

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+namespace hologram {
 
 class Camera {
 public:
@@ -23,4 +26,6 @@ private:
     glm::vec3 up;
     float yaw;
     float pitch;
-}; 
+};
+
+} // namespace hologram 
