@@ -124,6 +124,13 @@ private:
     std::deque<double> rttHistory;
     static const size_t RTT_HISTORY_SIZE = 10;
 
+    // FPS tracking variables
+    std::chrono::steady_clock::time_point lastFrameTime;
+    std::atomic<double> currentFPS;
+    std::deque<double> fpsHistory;
+    static const size_t FPS_HISTORY_SIZE = 10;
+    std::mutex fpsMutex;
+
     // Text rendering members
     unsigned int textShaderProgram;
     unsigned int textVAO, textVBO;
@@ -172,6 +179,8 @@ VolumetricClient::VolumetricClient() : window(nullptr), shaderProgram(0),
     currentBandwidth(0.0),
     currentRTT(0.0),
     lastPacketSentTime(std::chrono::steady_clock::now()),
+    lastFrameTime(std::chrono::steady_clock::now()),
+    currentFPS(0.0),
     shouldStop(false) {
     setupSocket();
     
@@ -588,6 +597,20 @@ void VolumetricClient::renderLoop() {
 }
 
 void VolumetricClient::render(const std::vector<float>& currentVertices) {
+    // Calculate FPS
+    auto now = std::chrono::steady_clock::now();
+    double frameTime = std::chrono::duration_cast<std::chrono::microseconds>(now - lastFrameTime).count() / 1000000.0; // Convert to seconds
+    lastFrameTime = now;
+
+    {
+        std::lock_guard<std::mutex> lock(fpsMutex);
+        fpsHistory.push_back(1.0 / frameTime);
+        if (fpsHistory.size() > FPS_HISTORY_SIZE) {
+            fpsHistory.pop_front();
+        }
+        currentFPS = std::accumulate(fpsHistory.begin(), fpsHistory.end(), 0.0) / fpsHistory.size();
+    }
+
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -626,6 +649,7 @@ void VolumetricClient::render(const std::vector<float>& currentVertices) {
     // Render network statistics
     std::stringstream ss;
     ss << std::fixed << std::setprecision(2) 
+       << "FPS: " << currentFPS << "\n"
        << "Bandwidth: " << currentBandwidth << " MB/s\n"
        << "RTT: " << currentRTT << " ms\n"
        << "Buffer: " << decompressedFrames.size() << "/" << MAX_DECOMPRESSED_FRAMES;
