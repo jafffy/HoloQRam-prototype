@@ -1,5 +1,8 @@
-#include "VolumetricClient.hpp"
-#include "RenderManager.hpp"
+#include "network/VolumetricClient.hpp"
+#include "graphics/RenderManager.hpp"
+#include "core/Camera.hpp"
+#include "network/NetworkManager.hpp"
+#include "network/DecompressionManager.hpp"
 #include <iostream>
 
 VolumetricClient::VolumetricClient()

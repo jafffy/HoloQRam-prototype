@@ -48,9 +48,29 @@ make -j4
 
 ## Project Structure
 
-- `src/server.cpp`: Point cloud generation and streaming server
-- `src/client.cpp`: OpenGL-based point cloud visualization client
-- `CMakeLists.txt`: Build configuration
+```
+holoQRam/
+├── include/                    # Header files
+│   ├── core/                  # Core functionality headers
+│   ├── graphics/              # Rendering related headers
+│   └── network/               # Network related headers
+├── src/                       # Source files
+│   ├── core/                  # Core functionality (Camera, etc.)
+│   ├── graphics/              # Rendering related code
+│   ├── network/               # Network and streaming code
+│   └── main.cpp              # Application entry point
+├── external/                  # Third-party dependencies
+├── scripts/                   # Build and utility scripts
+├── tests/                     # Unit tests
+├── examples/                  # Example programs
+├── docs/                      # Documentation
+└── CMakeLists.txt            # Build configuration
+```
+
+### Component Overview
+- **Core**: Basic functionality like camera controls and utilities
+- **Graphics**: OpenGL rendering, shaders, and text rendering
+- **Network**: Point cloud streaming, compression, and network management
 
 ## Current Limitations
 - Basic point cloud visualization

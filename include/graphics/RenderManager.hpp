@@ -17,7 +17,9 @@
 #include <memory>
 #include <chrono>
 
-#include "VolumetricClient.hpp"  // For Camera class definition
+// Forward declarations
+class Camera;
+class NetworkManager;
 
 struct Character {
     unsigned int TextureID;

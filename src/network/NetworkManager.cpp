@@ -1,4 +1,5 @@
-#include "VolumetricClient.hpp"
+#include "network/NetworkManager.hpp"
+#include "network/DecompressionManager.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>

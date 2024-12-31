@@ -1,5 +1,6 @@
-#include "VolumetricClient.hpp"
+#include "network/DecompressionManager.hpp"
 #include <sstream>
+#include <iostream>
 
 DecompressionManager::DecompressionManager()
     : shouldStop(false)

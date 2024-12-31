@@ -19,17 +19,17 @@ target_include_directories(glad PUBLIC external/glad/include)
 # Client source files
 set(CLIENT_SOURCES
     src/main.cpp
-    src/VolumetricClient.cpp
-    src/Camera.cpp
-    src/NetworkManager.cpp
-    src/DecompressionManager.cpp
-    src/RenderManager.cpp
-    src/TextRenderer.cpp
+    src/network/VolumetricClient.cpp
+    src/core/Camera.cpp
+    src/network/NetworkManager.cpp
+    src/network/DecompressionManager.cpp
+    src/graphics/RenderManager.cpp
+    src/graphics/TextRenderer.cpp
 )
 
 # Server source files
 set(SERVER_SOURCES
-    src/server.cpp
+    src/network/server.cpp
 )
 
 # Client executable
@@ -38,7 +38,10 @@ target_include_directories(client PRIVATE
     ${PCL_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
     ${FREETYPE_INCLUDE_DIRS}
-    src
+    include
+    include/core
+    include/graphics
+    include/network
 )
 target_link_libraries(client PRIVATE
     ${PCL_LIBRARIES}
@@ -52,6 +55,8 @@ target_link_libraries(client PRIVATE
 add_executable(server ${SERVER_SOURCES})
 target_include_directories(server PRIVATE
     ${PCL_INCLUDE_DIRS}
+    include
+    include/network
 )
 target_link_libraries(server PRIVATE
     ${PCL_LIBRARIES}

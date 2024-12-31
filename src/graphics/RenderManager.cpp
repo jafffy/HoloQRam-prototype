@@ -1,5 +1,7 @@
-#include "RenderManager.hpp"
-#include "Shaders.hpp"
+#include "graphics/RenderManager.hpp"
+#include "graphics/Shaders.hpp"
+#include "core/Camera.hpp"
+#include "network/NetworkManager.hpp"
 #include <iostream>
 #include <numeric>
 #include <sstream>
