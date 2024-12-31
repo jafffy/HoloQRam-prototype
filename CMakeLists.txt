@@ -29,7 +29,8 @@ set(CLIENT_SOURCES
 
 # Server source files
 set(SERVER_SOURCES
-    src/network/server.cpp
+    src/server/src/main.cpp
+    src/server/src/VolumetricServer.cpp
 )
 
 # Client executable
@@ -56,7 +57,7 @@ add_executable(server ${SERVER_SOURCES})
 target_include_directories(server PRIVATE
     ${PCL_INCLUDE_DIRS}
     include
-    include/network
+    include/server
 )
 target_link_libraries(server PRIVATE
     ${PCL_LIBRARIES}
