@@ -2,20 +2,20 @@
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl/compression/octree_pointcloud_compression.h>
 #include <thread>
 #include <mutex>
 #include <atomic>
 #include <deque>
 #include <vector>
 #include <condition_variable>
+#include "network/CompressionScheme.hpp"
 
 class DecompressionManager {
 public:
     static constexpr size_t MAX_COMPRESSED_FRAMES = 30;
     static constexpr size_t MAX_DECOMPRESSED_FRAMES = 10;
 
-    DecompressionManager();
+    DecompressionManager(const std::string& compressionScheme = "octree");
     ~DecompressionManager();
     
     void start();
@@ -38,7 +38,7 @@ public:
 private:
     void decompressFrames();
     
-    pcl::io::OctreePointCloudCompression<pcl::PointXYZRGB> decompressor;
+    std::unique_ptr<CompressionScheme> decompressor;
     std::thread decompressionThread;
     
     mutable std::mutex compressedFramesMutex;

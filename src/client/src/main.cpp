@@ -1,4 +1,4 @@
-#include "server/VolumetricServer.hpp"
+#include "network/OffscreenClient.hpp"
 #include <iostream>
 #include <string>
 
@@ -31,9 +31,9 @@ int main(int argc, char* argv[]) {
     }
     
     try {
-        VolumetricServer server(compressionScheme);
+        OffscreenClient client(compressionScheme);
         std::cout << "Using compression scheme: " << compressionScheme << std::endl;
-        server.run();
+        client.run();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;

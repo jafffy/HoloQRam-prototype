@@ -15,7 +15,8 @@
 #define MAX_PACKET_SIZE 65507 // Max UDP packet size
 #define CHUNK_HEADER_SIZE 8   // 4 bytes for total chunks, 4 bytes for chunk index
 
-VolumetricServer::VolumetricServer() : compressor(pcl::io::HIGH_RES_ONLINE_COMPRESSION_WITH_COLOR, false) {
+VolumetricServer::VolumetricServer(const std::string& compressionScheme) 
+    : compressor(CompressionScheme::create(compressionScheme)) {
     setupSocket();
     generateSamplePointCloud();
 }
@@ -77,11 +78,10 @@ void VolumetricServer::generateSamplePointCloud() {
 
 void VolumetricServer::streamPointCloud() {
     try {
-        std::stringstream compressedData;
-        compressor.encodePointCloud(cloud, compressedData);
+        std::vector<char> compressedData;
+        compressor->compress(cloud, compressedData);
         
-        std::string data = compressedData.str();
-        size_t totalSize = data.size();
+        size_t totalSize = compressedData.size();
         
         // Calculate number of chunks needed
         size_t maxChunkDataSize = MAX_PACKET_SIZE - CHUNK_HEADER_SIZE;
@@ -101,7 +101,7 @@ void VolumetricServer::streamPointCloud() {
             std::vector<char> packet(CHUNK_HEADER_SIZE + chunkSize);
             memcpy(packet.data(), &totalChunks, sizeof(totalChunks));
             memcpy(packet.data() + sizeof(totalChunks), &chunkIndex, sizeof(chunkIndex));
-            memcpy(packet.data() + CHUNK_HEADER_SIZE, data.data() + offset, chunkSize);
+            memcpy(packet.data() + CHUNK_HEADER_SIZE, compressedData.data() + offset, chunkSize);
             
             // Send packet
             sendto(sockfd, packet.data(), packet.size(), 0,

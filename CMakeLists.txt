@@ -17,6 +17,13 @@ add_library(glad
 )
 target_include_directories(glad PUBLIC external/glad/include)
 
+# Common source files for compression schemes
+set(COMPRESSION_SOURCES
+    src/network/CompressionScheme.cpp
+    src/network/OctreeCompression.cpp
+    src/network/RLECompression.cpp
+)
+
 # Client source files
 set(CLIENT_SOURCES
     src/main.cpp
@@ -27,6 +34,7 @@ set(CLIENT_SOURCES
     src/network/DecompressionManager.cpp
     src/graphics/RenderManager.cpp
     src/graphics/TextRenderer.cpp
+    ${COMPRESSION_SOURCES}
 )
 
 # Off-screen client source files
@@ -36,12 +44,14 @@ set(OFFSCREEN_CLIENT_SOURCES
     src/network/BaseClient.cpp
     src/network/NetworkManager.cpp
     src/network/DecompressionManager.cpp
+    ${COMPRESSION_SOURCES}
 )
 
 # Server source files
 set(SERVER_SOURCES
     src/server/src/main.cpp
     src/server/src/VolumetricServer.cpp
+    ${COMPRESSION_SOURCES}
 )
 
 # Common include directories
@@ -85,6 +95,7 @@ add_executable(server ${SERVER_SOURCES})
 target_include_directories(server PRIVATE
     ${COMMON_INCLUDE_DIRS}
     include/server
+    include/network
 )
 target_link_libraries(server PRIVATE
     ${PCL_LIBRARIES}

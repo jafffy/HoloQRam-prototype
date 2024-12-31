@@ -1,81 +1,83 @@
 #!/bin/bash
 
-# Function to display usage
-usage() {
-    echo "Usage: $0 [options]"
-    echo "Options:"
-    echo "  -s, --server       Run server"
-    echo "  -c, --client       Run normal client"
-    echo "  -o, --offscreen    Run offscreen client"
-    echo "  -h, --help         Display this help message"
-    exit 1
-}
-
 # Default values
-RUN_SERVER=0
-RUN_CLIENT=0
-RUN_OFFSCREEN=0
+COMPRESSION="octree"
+CLIENT_TYPE="normal"  # can be "normal" or "offscreen"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -s|--server)
-            RUN_SERVER=1
-            shift
+        --compression)
+            COMPRESSION="$2"
+            shift 2
             ;;
-        -c|--client)
-            RUN_CLIENT=1
-            shift
+        --client)
+            CLIENT_TYPE="$2"
+            shift 2
             ;;
-        -o|--offscreen)
-            RUN_OFFSCREEN=1
-            shift
-            ;;
-        -h|--help)
-            usage
+        --help)
+            echo "Usage: $0 [options]"
+            echo "Options:"
+            echo "  --compression <scheme>  Compression scheme to use (octree or rle, default: octree)"
+            echo "  --client <type>        Client type to run (normal or offscreen, default: normal)"
+            echo "  --help                 Show this help message"
+            exit 0
             ;;
         *)
-            echo "Unknown option: $1"
-            usage
+            echo "Error: Unknown argument '$1'"
+            echo "Use --help for usage information"
+            exit 1
             ;;
     esac
 done
 
-# If no options provided, show usage
-if [[ $RUN_SERVER -eq 0 && $RUN_CLIENT -eq 0 && $RUN_OFFSCREEN -eq 0 ]]; then
-    usage
+# Validate compression scheme
+if [[ "$COMPRESSION" != "octree" && "$COMPRESSION" != "rle" ]]; then
+    echo "Error: Invalid compression scheme. Use 'octree' or 'rle'."
+    exit 1
 fi
 
-# Create build directory if it doesn't exist
-if [ ! -d "build" ]; then
-    mkdir build
+# Validate client type
+if [[ "$CLIENT_TYPE" != "normal" && "$CLIENT_TYPE" != "offscreen" ]]; then
+    echo "Error: Invalid client type. Use 'normal' or 'offscreen'."
+    exit 1
 fi
 
 # Build the project
+mkdir -p build
 cd build
 cmake ..
 make -j4
 
-# Run components based on options
-if [ $RUN_SERVER -eq 1 ]; then
-    echo "Starting server..."
-    ./server &
-    SERVER_PID=$!
-    sleep 2  # Wait for server to start
-fi
+# Function to cleanup processes
+cleanup() {
+    echo "Shutting down gracefully..."
+    kill $SERVER_PID $CLIENT_PID 2>/dev/null
+    wait $SERVER_PID $CLIENT_PID 2>/dev/null
+    exit 0
+}
 
-if [ $RUN_CLIENT -eq 1 ]; then
-    echo "Starting normal client..."
-    ./client &
-    CLIENT_PID=$!
-fi
+# Set up trap for Ctrl+C and termination signals
+trap cleanup SIGINT SIGTERM
 
-if [ $RUN_OFFSCREEN -eq 1 ]; then
-    echo "Starting offscreen client..."
-    ./offscreen_client &
-    OFFSCREEN_PID=$!
-fi
+# Start server
+echo "Starting server with compression scheme: $COMPRESSION"
+./server --compression "$COMPRESSION" &
+SERVER_PID=$!
 
-# Wait for Ctrl+C
-trap 'kill $SERVER_PID $CLIENT_PID $OFFSCREEN_PID 2>/dev/null' SIGINT SIGTERM
-wait
+sleep 1  # Give server time to start
+
+# Start appropriate client
+if [[ "$CLIENT_TYPE" == "normal" ]]; then
+    echo "Starting normal client with compression scheme: $COMPRESSION"
+    ./client --compression "$COMPRESSION" &
+else
+    echo "Starting offscreen client with compression scheme: $COMPRESSION"
+    ./offscreen_client --compression "$COMPRESSION" &
+fi
+CLIENT_PID=$!
+
+# Wait for any signal
+while true; do
+    sleep 1
+done

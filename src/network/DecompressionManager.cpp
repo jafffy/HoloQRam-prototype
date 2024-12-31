@@ -2,8 +2,9 @@
 #include <sstream>
 #include <iostream>
 
-DecompressionManager::DecompressionManager()
-    : shouldStop(false)
+DecompressionManager::DecompressionManager(const std::string& compressionScheme)
+    : decompressor(CompressionScheme::create(compressionScheme))
+    , shouldStop(false)
 {
 }
 
@@ -67,11 +68,8 @@ void DecompressionManager::decompressFrames() {
         
         try {
             // Decompress the frame
-            std::stringstream compressedStream;
-            compressedStream.write(compressedData.data(), compressedData.size());
-            
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-            decompressor.decodePointCloud(compressedStream, cloud);
+            decompressor->decompress(compressedData, cloud);
             
             // Convert to vertices
             std::vector<float> vertices;
