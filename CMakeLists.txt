@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
-set(PCL_DIR "/usr/local/share/pcl-1.8")
 find_package(PCL 1.8 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
@@ -28,19 +27,32 @@ set(CLIENT_SOURCES
     src/graphics/TextRenderer.cpp
 )
 
+# Off-screen client source files
+set(OFFSCREEN_CLIENT_SOURCES
+    src/offscreen_main.cpp
+    src/network/OffscreenClient.cpp
+    src/network/NetworkManager.cpp
+    src/network/DecompressionManager.cpp
+)
+
 # Server source files
 set(SERVER_SOURCES
     src/server/src/main.cpp
     src/server/src/VolumetricServer.cpp
 )
 
+# Common include directories
+set(COMMON_INCLUDE_DIRS
+    ${PCL_INCLUDE_DIRS}
+    include
+)
+
 # Client executable
 add_executable(client ${CLIENT_SOURCES})
 target_include_directories(client PRIVATE
-    ${PCL_INCLUDE_DIRS}
+    ${COMMON_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
     ${FREETYPE_INCLUDE_DIRS}
-    include
     include/core
     include/graphics
     include/network
@@ -50,17 +62,28 @@ target_link_libraries(client PRIVATE
     ${OPENGL_LIBRARIES}
     glfw
     glad
-    ${FREETYPE_LIBRARIES}
+    pthread
+)
+
+# Off-screen client executable
+add_executable(offscreen_client ${OFFSCREEN_CLIENT_SOURCES})
+target_include_directories(offscreen_client PRIVATE
+    ${COMMON_INCLUDE_DIRS}
+    include/network
+)
+target_link_libraries(offscreen_client PRIVATE
+    ${PCL_LIBRARIES}
+    glfw
     pthread
 )
 
 # Server executable
 add_executable(server ${SERVER_SOURCES})
 target_include_directories(server PRIVATE
-    ${PCL_INCLUDE_DIRS}
-    include
+    ${COMMON_INCLUDE_DIRS}
     include/server
 )
 target_link_libraries(server PRIVATE
     ${PCL_LIBRARIES}
+    pthread
 ) 

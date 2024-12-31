@@ -23,6 +23,17 @@ public:
     
     void addCompressedFrame(std::vector<char>&& compressedData);
     bool getNextDecompressedFrame(std::vector<float>& vertices);
+    
+    // Queue size getters for performance metrics
+    size_t getCompressedQueueSize() const {
+        std::lock_guard<std::mutex> lock(compressedFramesMutex);
+        return compressedFrames.size();
+    }
+    
+    size_t getDecompressedQueueSize() const {
+        std::lock_guard<std::mutex> lock(decompressedFramesMutex);
+        return decompressedFrames.size();
+    }
 
 private:
     void decompressFrames();
@@ -30,8 +41,8 @@ private:
     pcl::io::OctreePointCloudCompression<pcl::PointXYZRGB> decompressor;
     std::thread decompressionThread;
     
-    std::mutex compressedFramesMutex;
-    std::mutex decompressedFramesMutex;
+    mutable std::mutex compressedFramesMutex;
+    mutable std::mutex decompressedFramesMutex;
     std::condition_variable compressedFramesCV;
     std::condition_variable decompressedFramesCV;
     

@@ -1,38 +1,81 @@
 #!/bin/bash
 
-# Get the directory where the script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PROJECT_ROOT="$SCRIPT_DIR/.."
-
-# Check if build directory exists
-if [ ! -d "$PROJECT_ROOT/build" ]; then
-    echo "Build directory not found. Please build the project first."
+# Function to display usage
+usage() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -s, --server       Run server"
+    echo "  -c, --client       Run normal client"
+    echo "  -o, --offscreen    Run offscreen client"
+    echo "  -h, --help         Display this help message"
     exit 1
-fi
-
-# Function to cleanup background processes on script exit
-cleanup() {
-    echo "Cleaning up processes..."
-    kill $SERVER_PID 2>/dev/null
-    kill $CLIENT_PID 2>/dev/null
-    exit 0
 }
 
-# Set up cleanup trap
-trap cleanup EXIT INT TERM
+# Default values
+RUN_SERVER=0
+RUN_CLIENT=0
+RUN_OFFSCREEN=0
 
-# Launch server in background
-echo "Starting server..."
-"$PROJECT_ROOT/build/server" &
-SERVER_PID=$!
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -s|--server)
+            RUN_SERVER=1
+            shift
+            ;;
+        -c|--client)
+            RUN_CLIENT=1
+            shift
+            ;;
+        -o|--offscreen)
+            RUN_OFFSCREEN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            ;;
+    esac
+done
 
-# Wait a moment for server to initialize
-sleep 2
+# If no options provided, show usage
+if [[ $RUN_SERVER -eq 0 && $RUN_CLIENT -eq 0 && $RUN_OFFSCREEN -eq 0 ]]; then
+    usage
+fi
 
-# Launch client
-echo "Starting client..."
-"$PROJECT_ROOT/build/client" &
-CLIENT_PID=$!
+# Create build directory if it doesn't exist
+if [ ! -d "build" ]; then
+    mkdir build
+fi
 
-# Wait for either process to exit
-wait $SERVER_PID $CLIENT_PID 
+# Build the project
+cd build
+cmake ..
+make -j4
+
+# Run components based on options
+if [ $RUN_SERVER -eq 1 ]; then
+    echo "Starting server..."
+    ./server &
+    SERVER_PID=$!
+    sleep 2  # Wait for server to start
+fi
+
+if [ $RUN_CLIENT -eq 1 ]; then
+    echo "Starting normal client..."
+    ./client &
+    CLIENT_PID=$!
+fi
+
+if [ $RUN_OFFSCREEN -eq 1 ]; then
+    echo "Starting offscreen client..."
+    ./offscreen_client &
+    OFFSCREEN_PID=$!
+fi
+
+# Wait for Ctrl+C
+trap 'kill $SERVER_PID $CLIENT_PID $OFFSCREEN_PID 2>/dev/null' SIGINT SIGTERM
+wait
