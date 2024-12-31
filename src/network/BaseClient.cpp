@@ -4,7 +4,9 @@
 
 #include <iostream>
 
-BaseClient::BaseClient() : shouldStop(false) {
+BaseClient::BaseClient(const std::string& compressionScheme)
+    : shouldStop(false)
+    , compressionScheme(compressionScheme) {
     initializeNetworking();
 }
 
@@ -15,7 +17,7 @@ BaseClient::~BaseClient() {
 void BaseClient::initializeNetworking() {
     try {
         // Initialize components in the correct order
-        decompressionManager = std::make_unique<DecompressionManager>();
+        decompressionManager = std::make_unique<DecompressionManager>(compressionScheme);
         networkManager = std::make_unique<NetworkManager>(decompressionManager.get());
 
         // Start network and decompression threads
@@ -37,5 +39,18 @@ void BaseClient::cleanupNetworking() {
 }
 
 bool BaseClient::getNextFrame(std::vector<float>& currentVertices) {
-    return decompressionManager->getNextDecompressedFrame(currentVertices);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+    if (!decompressionManager->getDecompressedCloud(cloud)) {
+        return false;
+    }
+
+    // Convert point cloud to vertices
+    currentVertices.clear();
+    currentVertices.reserve(cloud->points.size() * 3);
+    for (const auto& point : cloud->points) {
+        currentVertices.push_back(point.x);
+        currentVertices.push_back(point.y);
+        currentVertices.push_back(point.z);
+    }
+    return true;
 } 

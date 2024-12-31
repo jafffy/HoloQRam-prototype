@@ -1,33 +1,34 @@
 #pragma once
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#include "network/BaseClient.hpp"
+#include "hologram/network/NetworkProtocol.hpp"
+#include "hologram/network/ReliableNetworkManager.hpp"
+#include <memory>
+#include <string>
+#include <vector>
+#include <thread>
+#include <netinet/in.h>
 
-// Forward declarations
-class RenderManager;
-class Camera;
+namespace hologram {
 
-class VolumetricClient : public BaseClient {
+class VolumetricClient {
 public:
-    VolumetricClient();
-    ~VolumetricClient() override;
-    
-    void run() override;
+    VolumetricClient(const std::string& serverIP, int serverPort);
+    ~VolumetricClient();
+
+    void start();
+    void stop();
 
 private:
-    GLFWwindow* window;
-    std::unique_ptr<Camera> camera;
-    std::unique_ptr<RenderManager> renderManager;
+    bool running;
+    std::unique_ptr<ReliableNetworkManager> networkManager;
     
-    // Mouse handling
-    float lastX;
-    float lastY;
-    bool firstMouse;
+    // Network socket
+    int sockfd;
+    struct sockaddr_in serverAddr;
     
-    static void mouseCallback(GLFWwindow* window, double xpos, double ypos);
-    void processMouse(double xpos, double ypos);
-    void processInput();
-    void initializeGraphics();
-    void cleanupGraphics();
-}; 
+    // Client thread
+    std::unique_ptr<std::thread> clientThread;
+    void clientLoop();
+};
+
+} // namespace hologram 

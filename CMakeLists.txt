@@ -27,6 +27,16 @@ set(COMPRESSION_SOURCES
     src/compression/CompressionScheme.cpp
     src/compression/OctreeCompression.cpp
     src/compression/RLECompression.cpp
+    src/compression/ViVoCompression.cpp
+)
+
+# Common network sources
+set(NETWORK_SOURCES
+    src/network/NetworkManager.cpp
+    src/network/ReliableNetworkManager.cpp
+    src/network/NetworkMetrics.cpp
+    src/network/AdaptiveNetworkControl.cpp
+    src/network/DecompressionManager.cpp
 )
 
 # Client source files
@@ -35,11 +45,11 @@ set(CLIENT_SOURCES
     src/network/VolumetricClient.cpp
     src/network/BaseClient.cpp
     src/core/Camera.cpp
-    src/network/NetworkManager.cpp
     src/network/DecompressionManager.cpp
     src/graphics/RenderManager.cpp
     src/graphics/TextRenderer.cpp
     ${COMPRESSION_SOURCES}
+    ${NETWORK_SOURCES}
 )
 
 # Off-screen client source files
@@ -47,16 +57,18 @@ set(OFFSCREEN_CLIENT_SOURCES
     src/apps/offscreen_main.cpp
     src/network/OffscreenClient.cpp
     src/network/BaseClient.cpp
-    src/network/NetworkManager.cpp
     src/network/DecompressionManager.cpp
     ${COMPRESSION_SOURCES}
+    ${NETWORK_SOURCES}
 )
 
 # Server source files
 set(SERVER_SOURCES
     src/apps/server_main.cpp
     src/server/VolumetricServer.cpp
+    src/server/CellManager.cpp
     ${COMPRESSION_SOURCES}
+    ${NETWORK_SOURCES}
 )
 
 # Common include directories

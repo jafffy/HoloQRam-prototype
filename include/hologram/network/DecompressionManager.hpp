@@ -1,55 +1,53 @@
 #pragma once
 
+#include "hologram/compression/CompressionScheme.hpp"
 #include <memory>
+#include <string>
 #include <vector>
-#include <thread>
-#include <deque>
-#include <atomic>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
+#include <queue>
 #include <mutex>
 #include <condition_variable>
-
-#include "hologram/compression/CompressionScheme.hpp"
+#include <thread>
 
 class DecompressionManager {
 public:
-    static constexpr size_t MAX_COMPRESSED_FRAMES = 30;
-    static constexpr size_t MAX_DECOMPRESSED_FRAMES = 10;
-
-    DecompressionManager(const std::string& compressionScheme = "octree");
+    explicit DecompressionManager(const std::string& compressionScheme);
     ~DecompressionManager();
-    
+
     void start();
     void stop();
-    
-    void addCompressedFrame(std::vector<char>&& compressedData);
-    bool getNextDecompressedFrame(std::vector<float>& vertices);
-    
-    // Queue size getters for performance metrics
+
+    void addCompressedData(const std::vector<char>& data);
+    bool getDecompressedCloud(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud);
+
+    // Queue size getters
     size_t getCompressedQueueSize() const {
-        std::lock_guard<std::mutex> lock(compressedFramesMutex);
-        return compressedFrames.size();
+        std::lock_guard<std::mutex> lock(queueMutex);
+        return compressedQueue.size();
     }
-    
+
     size_t getDecompressedQueueSize() const {
-        std::lock_guard<std::mutex> lock(decompressedFramesMutex);
-        return decompressedFrames.size();
+        std::lock_guard<std::mutex> lock(cloudMutex);
+        return decompressedQueue.size();
     }
 
 private:
+    bool running;
+    std::unique_ptr<hologram::CompressionScheme> decompressor;
+
+    // Thread for decompression
+    std::unique_ptr<std::thread> decompThread;
     void decompressFrames();
-    
-    std::unique_ptr<CompressionScheme> decompressor;
-    std::thread decompressionThread;
-    
-    mutable std::mutex compressedFramesMutex;
-    mutable std::mutex decompressedFramesMutex;
-    std::condition_variable compressedFramesCV;
-    std::condition_variable decompressedFramesCV;
-    
-    std::deque<std::vector<char>> compressedFrames;
-    std::deque<std::vector<float>> decompressedFrames;
-    
-    std::atomic<bool> shouldStop;
+
+    // Queue for compressed data
+    std::queue<std::vector<char>> compressedQueue;
+    mutable std::mutex queueMutex;
+    std::condition_variable queueCV;
+
+    // Queue for decompressed clouds
+    std::queue<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> decompressedQueue;
+    mutable std::mutex cloudMutex;
+    std::condition_variable cloudCV;
+
+    static constexpr size_t MAX_QUEUE_SIZE = 30;
 }; 

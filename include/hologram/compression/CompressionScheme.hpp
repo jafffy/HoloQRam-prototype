@@ -6,6 +6,8 @@
 #include <memory>
 #include <string>
 
+namespace hologram {
+
 class CompressionScheme {
 public:
     virtual ~CompressionScheme() = default;
@@ -14,4 +16,6 @@ public:
     virtual void decompress(const std::vector<char>& compressedData, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud) = 0;
     
     static std::unique_ptr<CompressionScheme> create(const std::string& scheme);
-}; 
+};
+
+} // namespace hologram 

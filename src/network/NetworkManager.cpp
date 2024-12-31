@@ -148,7 +148,7 @@ void NetworkManager::receiveData() {
                 if (frameBuffers[frameId].size() >= 
                     (expectedChunks[frameId] * (65507 - CHUNK_HEADER_SIZE))) {
                     // Pass the complete frame to DecompressionManager
-                    decompManager->addCompressedFrame(std::move(frameBuffers[frameId]));
+                    decompManager->addCompressedData(std::move(frameBuffers[frameId]));
                     
                     // Cleanup
                     frameBuffers.erase(frameId);

@@ -1,143 +1,93 @@
-#include "network/VolumetricClient.hpp"
-#include "graphics/RenderManager.hpp"
-#include "core/Camera.hpp"
+#include "hologram/network/VolumetricClient.hpp"
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 #include <iostream>
+#include <chrono>
+#include <algorithm>
+#include <cstring>
+#include <thread>
 
-VolumetricClient::VolumetricClient()
-    : BaseClient()
-    , lastX(640.0f)
-    , lastY(360.0f)
-    , firstMouse(true)
+namespace hologram {
+
+VolumetricClient::VolumetricClient(const std::string& serverIP, int serverPort)
+    : running(false)
+    , sockfd(-1)
 {
-    initializeGraphics();
+    // Initialize socket
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        throw std::runtime_error("Error creating socket");
+    }
+
+    // Set up server address
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(serverPort);
+    if (inet_pton(AF_INET, serverIP.c_str(), &serverAddr.sin_addr) <= 0) {
+        throw std::runtime_error("Invalid server IP address");
+    }
+
+    // Set socket buffer size
+    int recvbuff = 1024 * 1024; // 1MB buffer
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &recvbuff, sizeof(recvbuff)) < 0) {
+        std::cerr << "Warning: Could not set socket buffer size" << std::endl;
+    }
+
+    // Initialize network manager
+    networkManager = std::make_unique<ReliableNetworkManager>(sockfd);
 }
 
 VolumetricClient::~VolumetricClient() {
-    cleanupGraphics();
+    stop();
+    if (sockfd >= 0) {
+        close(sockfd);
+    }
 }
 
-void VolumetricClient::initializeGraphics() {
-    // Initialize GLFW
-    if (!glfwInit()) {
-        throw std::runtime_error("Failed to initialize GLFW");
+void VolumetricClient::start() {
+    if (running) return;
+    
+    running = true;
+    networkManager->start();
+    clientThread = std::make_unique<std::thread>(&VolumetricClient::clientLoop, this);
+}
+
+void VolumetricClient::stop() {
+    if (!running) return;
+    
+    running = false;
+    networkManager->stop();
+    
+    if (clientThread && clientThread->joinable()) {
+        clientThread->join();
     }
+}
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+void VolumetricClient::clientLoop() {
+    while (running) {
+        // Send viewport update
+        ViewportInfo viewport;
+        viewport.position[0] = 0.0f;
+        viewport.position[1] = 0.0f;
+        viewport.position[2] = 0.0f;
+        viewport.rotation[0] = 0.0f;
+        viewport.rotation[1] = 0.0f;
+        viewport.rotation[2] = 0.0f;
+        viewport.fov = 60.0f;
+        viewport.aspectRatio = 16.0f / 9.0f;
+        viewport.nearPlane = 0.1f;
+        viewport.farPlane = 100.0f;
 
-    // Create window
-    window = glfwCreateWindow(1280, 720, "Volumetric Video Client", NULL, NULL);
-    if (!window) {
-        glfwTerminate();
-        throw std::runtime_error("Failed to create GLFW window");
-    }
-
-    glfwMakeContextCurrent(window);
-    glfwSetWindowUserPointer(window, this);
-    glfwSetCursorPosCallback(window, mouseCallback);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-    // Initialize GLAD
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        throw std::runtime_error("Failed to initialize GLAD");
-    }
-
-    try {
-        // Initialize graphics components
-        camera = std::make_unique<Camera>();
-        renderManager = std::make_unique<RenderManager>(window, camera.get(), networkManager.get());
-        renderManager->initialize();
-    }
-    catch (const std::exception& e) {
-        // Clean up in case of initialization failure
-        renderManager.reset();
-        camera.reset();
+        // Serialize viewport data
+        std::vector<char> data(sizeof(ViewportInfo));
+        std::memcpy(data.data(), &viewport, sizeof(ViewportInfo));
         
-        if (window) {
-            glfwDestroyWindow(window);
-        }
-        glfwTerminate();
+        // Send via network manager
+        networkManager->sendReliable(data, PacketType::VIEWPORT_UPDATE);
         
-        throw;
+        // Sleep for a bit
+        std::this_thread::sleep_for(std::chrono::milliseconds(33)); // ~30 FPS
     }
 }
 
-void VolumetricClient::cleanupGraphics() {
-    renderManager.reset();
-    camera.reset();
-
-    if (window) {
-        glfwDestroyWindow(window);
-    }
-    glfwTerminate();
-}
-
-void VolumetricClient::mouseCallback(GLFWwindow* window, double xpos, double ypos) {
-    VolumetricClient* client = static_cast<VolumetricClient*>(glfwGetWindowUserPointer(window));
-    client->processMouse(xpos, ypos);
-}
-
-void VolumetricClient::processMouse(double xpos, double ypos) {
-    if (firstMouse) {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-        return;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos;
-    lastX = xpos;
-    lastY = ypos;
-
-    float sensitivity = 0.1f;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
-
-    float newYaw = camera->getYaw() + xoffset;
-    float newPitch = camera->getPitch() + yoffset;
-
-    camera->updateRotation(newYaw, newPitch);
-}
-
-void VolumetricClient::processInput() {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-        glfwSetWindowShouldClose(window, true);
-    }
-
-    float cameraSpeed = 0.05f;
-    glm::vec3 position = camera->getPosition();
-    glm::vec3 front = camera->getFront();
-    glm::vec3 up = camera->getUp();
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        position += cameraSpeed * front;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        position -= cameraSpeed * front;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        position -= glm::normalize(glm::cross(front, up)) * cameraSpeed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        position += glm::normalize(glm::cross(front, up)) * cameraSpeed;
-
-    camera->updatePosition(position);
-}
-
-void VolumetricClient::run() {
-    std::vector<float> currentVertices;
-
-    while (!glfwWindowShouldClose(window) && !shouldStop) {
-        processInput();
-
-        // Get next frame if available
-        if (getNextFrame(currentVertices)) {
-            renderManager->render(currentVertices);
-        } else {
-            // Render previous frame if no new frame is available
-            renderManager->render(currentVertices);
-        }
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-} 
+} // namespace hologram 

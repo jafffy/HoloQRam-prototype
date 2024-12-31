@@ -2,6 +2,8 @@
 
 #include "hologram/compression/CompressionScheme.hpp"
 
+namespace hologram {
+
 class RLECompression : public CompressionScheme {
 public:
     RLECompression() = default;
@@ -17,4 +19,6 @@ private:
     
     void encodeRLE(const std::vector<Point>& points, std::vector<char>& compressed);
     void decodeRLE(const std::vector<char>& compressed, std::vector<Point>& points);
-}; 
+};
+
+} // namespace hologram 

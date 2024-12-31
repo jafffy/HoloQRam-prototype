@@ -1,6 +1,7 @@
 #include "hologram/network/OffscreenClient.hpp"
 #include <iostream>
 #include <csignal>
+#include <atomic>
 
 std::atomic<bool> running(true);
 

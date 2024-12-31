@@ -1,44 +1,71 @@
 #include "hologram/compression/OctreeCompression.hpp"
 #include <sstream>
 
-OctreeCompression::OctreeCompression()
-    : compressor(pcl::io::HIGH_RES_ONLINE_COMPRESSION_WITH_COLOR, false)
-    , decompressor(pcl::io::HIGH_RES_ONLINE_COMPRESSION_WITH_COLOR, false)
-{
+namespace hologram {
+
+OctreeCompression::OctreeCompression(const CompressionSettings& settings) : settings(settings) {
+    initializeCompressor();
 }
 
 void OctreeCompression::compress(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud, std::vector<char>& compressedData) {
-    std::stringstream compressed;
-    compressor.encodePointCloud(cloud, compressed);
+    lastOriginalSize = cloud->size() * sizeof(pcl::PointXYZRGB);
+    
+    std::stringstream compressedStream;
+    encoder->encodePointCloud(cloud, compressedStream);
     
     // Convert stringstream to vector<char>
-    compressed.seekg(0, std::ios::end);
-    size_t size = compressed.tellg();
-    compressed.seekg(0);
+    compressedData = std::vector<char>(
+        std::istreambuf_iterator<char>(compressedStream),
+        std::istreambuf_iterator<char>()
+    );
     
-    compressedData.resize(size);
-    compressed.read(compressedData.data(), size);
+    lastCompressedSize = compressedData.size();
 }
 
 void OctreeCompression::decompress(const std::vector<char>& compressedData, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud) {
-    // Clear existing cloud and reserve approximate space
-    cloud->clear();
-    cloud->reserve(100000);  // Reserve space for 100k points - adjust based on your typical point cloud size
+    // Convert vector<char> to stringstream
+    std::stringstream compressedStream;
+    compressedStream.write(compressedData.data(), compressedData.size());
     
-    // Create stringstream from compressed data
-    std::stringstream compressed;
-    compressed.write(compressedData.data(), compressedData.size());
-    
-    try {
-        decompressor.decodePointCloud(compressed, cloud);
-    } catch (const std::bad_alloc& e) {
-        // If allocation fails, try with a smaller reserve
-        cloud->clear();
-        cloud->reserve(50000);  // Try with 50k points
-        compressed.seekg(0);  // Reset stream position
-        decompressor.decodePointCloud(compressed, cloud);
+    // Create a new cloud if needed
+    if (!cloud) {
+        cloud.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     }
     
-    // Shrink to fit actual size
-    cloud->points.shrink_to_fit();
-} 
+    decoder->decodePointCloud(compressedStream, cloud);
+}
+
+void OctreeCompression::updateSettings(const CompressionSettings& newSettings) {
+    settings = newSettings;
+    initializeCompressor();
+}
+
+float OctreeCompression::getCompressionRatio() const {
+    if (lastOriginalSize == 0) return 0.0f;
+    return static_cast<float>(lastCompressedSize) / static_cast<float>(lastOriginalSize);
+}
+
+size_t OctreeCompression::getCompressedSize() const {
+    return lastCompressedSize;
+}
+
+size_t OctreeCompression::getOriginalSize() const {
+    return lastOriginalSize;
+}
+
+void OctreeCompression::initializeCompressor() {
+    encoder.reset(new pcl::io::OctreePointCloudCompression<PointT>(
+        pcl::io::MANUAL_CONFIGURATION,
+        false, // showStatistics
+        static_cast<double>(settings.resolution),
+        static_cast<double>(settings.resolution),
+        settings.doVoxelGridDownDownSampling,
+        settings.iFrameRate,
+        settings.doColorEncoding,
+        static_cast<unsigned char>(settings.colorBitResolution)
+    ));
+    
+    decoder.reset(new pcl::io::OctreePointCloudCompression<PointT>());
+}
+
+} // namespace hologram 
